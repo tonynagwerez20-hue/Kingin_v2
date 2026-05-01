@@ -13,33 +13,6 @@ except ImportError:
 import argparse
 import aiohttp
 
-def check_dependencies():
-    """Verify all requirements are installed, attempt auto-fix if missing."""
-    requirements_file = Path(__file__).parent.parent / "requirements.txt"
-    if not pkg_resources or not requirements_file.exists():
-        return
-    
-    with open(requirements_file, "r") as f:
-        requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-    
-    missing = []
-    for req in requirements:
-        try:
-            pkg_resources.require(req)
-        except (pkg_resources.DistributionNotFound, pkg_resources.VersionConflict):
-            missing.append(req)
-    
-    if missing:
-        print(f"[Startup] Missing dependencies detected: {missing}")
-        print("[Startup] Attempting automatic installation...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(requirements_file)])
-            print("[Startup] Installation successful. Please restart the system.")
-            sys.exit(0)
-        except Exception as e:
-            print(f"[Startup] Automatic installation failed: {e}")
-            print("[Startup] Please run: pip install -r requirements.txt manually.")
-            sys.exit(1)
 
 # ensure project root is on path
 project_root = Path(__file__).parent.parent
@@ -98,7 +71,9 @@ try:
     # IGOF Filtration
     from Engine.igof.stack import FiltrationController
 except ImportError as e:
-    print(f"Import Error: {e}")
+    print(f"[CRITICAL] Import Error in engine logic modules: {e}")
+    print("[CRITICAL] Engine cannot start. Run: pip install -r requirements.txt")
+    sys.exit(1)
 
 
 # --- LOGGING SETUP ---

@@ -31,8 +31,8 @@ try:
 except ImportError as _e:
     ZMQBridge = None
     _ZMQ_IMPORT_ERROR = (
-        f"zmq_bridge.py not found in Engine/ folder ({_e}). "
-        "Copy zmq_bridge.py to: C:\\Users\\LENOVO\\Desktop\\kingin-master\\Engine\\"
+        f"zmq_bridge.py not found in the Engine/ folder ({_e}). "
+        "Copy zmq_bridge.py into your Engine/ directory and restart."
     )
 except Exception as _e:
     ZMQBridge = None
@@ -644,6 +644,11 @@ class ModularBootstrapper:
                                             f"@ {ea_signal.get('price')}"
                                         )
                                         self.emit_dashboard_msg(f"✓ SENT TO HEDGEEA: {ea_signal['action']} @ {ea_signal.get('price')}")
+
+                                        # ── FIX: Append to dashboard signals on the SENT path, not duplicate path ──
+                                        current_state["signals"].append(ea_signal)
+                                        if len(current_state["signals"]) > 50:
+                                            current_state["signals"] = current_state["signals"][-50:]
                                     else:
                                         logger.warning(
                                             "[PIPELINE] Bridge send failed — "
@@ -657,11 +662,6 @@ class ModularBootstrapper:
                                     )
                             else:
                                 logger.debug(f"[PIPELINE] Duplicate signal suppressed: {sig_id}")
-
-                                # Keep signals list bounded for dashboard (last 50)
-                                current_state["signals"].append(ea_signal)
-                                if len(current_state["signals"]) > 50:
-                                    current_state["signals"] = current_state["signals"][-50:]
 
                         # ── News scalp path (bypasses IGOF but not risk) ───────────────
                         if news_scalp_signal and self.config.get("pipeline", {}).get("enable_news_scalp", False):

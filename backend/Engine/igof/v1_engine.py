@@ -41,7 +41,8 @@ class V1FiltrationEngine:
                 ZoneQualityLayer(self.config.get("layer2_zone_quality", {})),
                 LiquidityEventLayer(self.config.get("layer3_liquidity", {})),
                 MicrostructureShiftLayer(self.config.get("layer4_microstructure", {})),
-                DisplacementLayer(self.config.get("layer5_displacement", {}))
+                DisplacementLayer(self.config.get("layer5_displacement", {})),
+                MLFilterLayer(self.config.get("layer6_ml", {}))
             ]
 
     def process_all_layers(self, market_snapshot: Dict) -> Dict:

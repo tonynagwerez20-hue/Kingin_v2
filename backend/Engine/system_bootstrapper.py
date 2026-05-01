@@ -73,8 +73,9 @@ class SystemBootstrapper:
             print("[Startup] Attempting automatic installation...")
             try:
                 subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(requirements_file)])
-                print("[Startup] Installation successful. Please restart the system.")
-                sys.exit(0)
+                print("[Startup] Installation successful. Continuing startup...")
+                # Do NOT sys.exit(0) — let the engine continue after install
+                return
             except Exception as e:
                 print(f"[Startup] Automatic installation failed: {e}")
                 print("[Startup] Please run: pip install -r requirements.txt manually.")
@@ -129,7 +130,7 @@ class SystemBootstrapper:
         from support.risk.cro_rules import CRORules
         from support.risk.regime_layer import RegimeLayer
         from support.risk.broker_watchdog import BrokerWatchdog
-        from support.risk.audit_logger import AuditLogger
+        from support.audit_logger import AuditLogger
         from support.strategies.manager import StrategyManager
         from support.strategies.filter_one import FilterOne
         from support.strategies.filter_two import FilterTwo

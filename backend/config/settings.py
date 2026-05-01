@@ -3,7 +3,7 @@ from pathlib import Path
 
 # --- PROJECT PATHS ---
 PROJECT_ROOT = Path(__file__).parent.parent
-LOG_DIR      = PROJECT_ROOT / "logs"
+LOG_DIR      = PROJECT_ROOT / "storage" / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # --- NETWORK CONFIG ---

@@ -485,12 +485,12 @@ class TradingLoopController:
             try:
                 result = self.bridge.send_signal(enriched_trade)
                 if result:
-                    print(f"[TradingLoop] NEWS SCALP executed: {trade['trigger']}")
+                    print(f"[TradingLoop] NEWS SCALP executed: {enriched_trade.get('trigger', 'N/A')}")
                     return True
             except Exception as e:
                 print(f"[TradingLoop] News scalp execution error: {e}")
         elif self.backtest_mode:
-            print(f"[TradingLoop] [BACKTEST] News scalp: {trade['trigger']}")
+            print(f"[TradingLoop] [BACKTEST] News scalp: {enriched_trade.get('trigger', 'N/A')}")
             return True
         return False
 

@@ -19,6 +19,10 @@ const Login = ({ onLogin }) => {
       const res = await api.post('/login', { password });
       if (res.data.success) {
         localStorage.setItem('kingin_jwt', res.data.token);
+        // Store the control token returned by the backend — never hard-coded
+        if (res.data.controlToken) {
+          localStorage.setItem('kingin_ctrl', res.data.controlToken);
+        }
         onLogin(res.data.token);
       } else {
         setError(res.data.error || "Invalid Access Token");

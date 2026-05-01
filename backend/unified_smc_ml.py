@@ -375,8 +375,21 @@ class RiverDriftMonitor:
         return False
     
     def online_score(self, features: dict) -> float:
-        """Secondary confidence score."""
-        return 0.5  # Placeholder
+        """
+        Secondary confidence score based on recent performance.
+        If we are in a winning streak, confidence increases.
+        If we are drifting (losing streak), confidence decreases.
+        """
+        if not self._recent:
+            return 0.5
+            
+        recent_win_rate = sum(self._recent) / len(self._recent)
+        
+        # If drifting, we penalize the score heavily
+        if self.is_drifting:
+            return min(0.45, recent_win_rate)
+            
+        return recent_win_rate
     
     def stats(self) -> dict:
         return {

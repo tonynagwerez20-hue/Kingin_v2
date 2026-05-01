@@ -169,3 +169,66 @@ class DisplacementLayer(FiltrationLayer):
         if body_to_wick > min_ratio and spread > min_spread:
             return {"status": True, "reason": "Displacement validated"}
         return {"status": False, "reason": f"Weak displacement (Ratio: {body_to_wick:.2f})"}
+
+class MLFilterLayer(FiltrationLayer):
+    """
+    Layer 6: Machine Learning Filter.
+    Bridges to the unified_smc_ml.py Hybrid Engine.
+    Enables constant learning and adaptive confidence thresholds.
+    """
+    _engine = None
+
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        # Lazy initialization to avoid overhead if not used
+        self.enabled = config.get('enabled', True)
+
+    def _get_engine(self):
+        if MLFilterLayer._engine is None:
+            try:
+                from unified_smc_ml import HybridMLEngine
+                MLFilterLayer._engine = HybridMLEngine()
+            except ImportError as e:
+                print(f"[ML] Failed to load HybridMLEngine: {e}")
+                self.enabled = False
+        return MLFilterLayer._engine
+
+    def process(self, market_snapshot: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.enabled:
+            return {"status": True, "reason": "ML Filter disabled or failed to load"}
+        
+        engine = self._get_engine()
+        if not engine:
+            return {"status": True, "reason": "ML Engine unavailable"}
+
+        # Prepare signal dictionary for ML engine
+        # Map snapshot fields to what engineer_features expects
+        signal_data = {
+            "ob_strength": market_snapshot.get("h1_bias_score", 0) / 3.0,
+            "fvg_present": market_snapshot.get("h1_bias_score", 0) >= 3,
+            "bos_aligned": market_snapshot.get("h1_bias_score", 0) >= 1,
+            "liquidity_swept": "Liquidity sweep detected" in str(market_snapshot.get("layer_results", "")),
+            "session": market_snapshot.get("session", "london"),
+            "htf_bias": market_snapshot.get("h1_bias_score", 0) - 1, # Center at 0
+        }
+
+        should_trade, confidence, debug = engine.evaluate_signal(signal_data)
+        
+        # Inject ML results back into snapshot for the orchestrator/UI
+        market_snapshot["ml_confidence"] = confidence
+        market_snapshot["ml_debug"] = debug
+        
+        if should_trade:
+            return {
+                "status": True, 
+                "reason": f"ML Confirmed (Conf: {confidence:.2f})",
+                "confidence": confidence,
+                "debug": debug
+            }
+            
+        return {
+            "status": False, 
+            "reason": f"ML Filtered (Conf: {confidence:.2f})",
+            "confidence": confidence,
+            "debug": debug
+        }

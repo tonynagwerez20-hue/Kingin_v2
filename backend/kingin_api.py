@@ -90,6 +90,10 @@ def _check_control_token(request: Request) -> bool:
     provided = request.headers.get("X-Control-Token", "")
     return provided == _CONTROL_TOKEN
 
+def _check_engine_auth(request: Request) -> bool:
+    """Accept either a valid JWT OR the control token for engine endpoints."""
+    return _check_token(request) or _check_control_token(request)
+
 @app.post("/api/login")
 async def login(request: Request):
     """Simple JWT login against environment password."""
@@ -97,10 +101,16 @@ async def login(request: Request):
         body = await request.json()
         password = body.get("password")
         env_password = os.getenv("KINGIN_USER_PASSWORD")
-        
+
         if env_password and password == env_password:
             token = create_token("admin")
-            return JSONResponse({"success": True, "token": token})
+            return JSONResponse({
+                "success": True,
+                "token": token,
+                # Send the control token only after successful auth so the
+                # frontend never has it hard-coded in the JS bundle.
+                "controlToken": _CONTROL_TOKEN,
+            })
         else:
             return JSONResponse({"success": False, "error": "Invalid password"}, status_code=401)
     except Exception as e:
@@ -247,19 +257,34 @@ def _read_audit_state() -> dict:
 
     try:
         file_size = audit_path.stat().st_size
-        # If file is larger than 2MB, only read the last 1MB
         if file_size > 2 * 1024 * 1024:
+            # Read last 512KB and parse the most recent complete JSON objects
             with open(audit_path, "rb") as f:
-                f.seek(-1 * 1024 * 1024, os.SEEK_END)
+                f.seek(-512 * 1024, os.SEEK_END)
                 chunk = f.read().decode("utf-8", errors="ignore")
-                # Find the first valid '[' to start a JSON array fragment
-                start = chunk.find("[")
-                if start != -1:
-                    logs = json.loads(chunk[start:])
-                else:
-                    # Fallback to full load if fragmenting fails
-                    f.seek(0)
-                    logs = json.load(f)
+            # Find the last '{' that starts a JSON object and build a valid array
+            objects = []
+            depth = 0
+            in_obj = False
+            start_idx = None
+            for i, ch in enumerate(chunk):
+                if ch == '{' and not in_obj:
+                    in_obj = True
+                    start_idx = i
+                    depth = 1
+                elif in_obj:
+                    if ch == '{':
+                        depth += 1
+                    elif ch == '}':
+                        depth -= 1
+                        if depth == 0:
+                            try:
+                                obj = json.loads(chunk[start_idx:i+1])
+                                objects.append(obj)
+                            except Exception:
+                                pass
+                            in_obj = False
+            logs = objects if objects else []
         else:
             with open(audit_path, "r") as f:
                 logs = json.load(f)
@@ -391,17 +416,20 @@ def _build_engine_state() -> dict:
 
 @app.get("/api/engine/state")
 async def engine_state(request: Request):
-    if not _check_control_token(request):
+    if not _check_engine_auth(request):
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     state = _build_engine_state()
     return JSONResponse(state)
 
 
+# Track the engine log file handle so we can close it on restart
+_engine_log_handle = None
+
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
-    if not _check_control_token(request):
+    if not _check_engine_auth(request):
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
-    global _engine_process, _engine_start_time
+    global _engine_process, _engine_start_time, _engine_log_handle
 
     if _is_engine_running():
         return JSONResponse({"success": True, "message": "Engine already running"})
@@ -416,12 +444,20 @@ async def engine_start(request: Request):
 
         log_dir = PROJECT_ROOT / "storage" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        engine_log = open(log_dir / "engine_stdout.log", "a")
+
+        # Close previous log handle if open (prevent file descriptor leak)
+        if _engine_log_handle and not _engine_log_handle.closed:
+            try:
+                _engine_log_handle.close()
+            except Exception:
+                pass
+
+        _engine_log_handle = open(log_dir / "engine_stdout.log", "a")
         _engine_process = subprocess.Popen(
             [sys.executable, str(engine_script)],
             cwd=str(PROJECT_ROOT),
-            stdout=engine_log,
-            stderr=engine_log,
+            stdout=_engine_log_handle,
+            stderr=_engine_log_handle,
         )
         _engine_start_time = time.time()
 
@@ -444,9 +480,9 @@ async def engine_start(request: Request):
 
 @app.post("/api/engine/stop")
 async def engine_stop(request: Request):
-    if not _check_control_token(request):
+    if not _check_engine_auth(request):
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=403)
-    global _engine_process
+    global _engine_process, _engine_log_handle
 
     if not _is_engine_running():
         return JSONResponse({"success": True, "message": "Engine not running"})
@@ -457,6 +493,14 @@ async def engine_stop(request: Request):
             _engine_process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             _engine_process.kill()
+
+        # Close the log file handle now that the engine has stopped
+        if _engine_log_handle and not _engine_log_handle.closed:
+            try:
+                _engine_log_handle.close()
+            except Exception:
+                pass
+            _engine_log_handle = None
 
         _engine_process = None
         return JSONResponse({"success": True, "message": "Engine stopped"})

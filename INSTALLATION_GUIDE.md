@@ -1,68 +1,98 @@
-# KingIn Trading System - Setup Guide
+# 🛠 KingIn Trading System — Installation & Setup Guide
 
-This guide provides step-by-step instructions for setting up the KingIn Trading System on a new Windows machine.
+This guide covers the full setup of the KingIn Institutional Trading System on a new machine.
 
-## 🚀 Option 1: Quick Start (Running the Executable)
-Use this if you just want to run the platform as a professional desktop application.
+## 📋 Prerequisites
 
-1.  **Prerequisites:**
-    *   **MetaTrader 5 (MT5)** must be installed and running.
-    *   **Python 3.10+** must be installed and added to your Windows PATH.
-2.  **Steps:**
-    *   Navigate to `frontend\dist_electron\`.
-    *   Double-click `KingIn Trading System 1.0.0.exe`.
-    *   Enter the Access Password (default: `kingin123`).
-    *   Configure your MT5 credentials in the Settings panel and click **Start Engine**.
+Before you begin, ensure your machine meets the following requirements:
+
+- **Operating System**: Windows 10/11 (64-bit)
+- **Python**: Version 3.10 or higher ([Download](https://www.python.org/downloads/))
+- **Node.js**: Version 18.x or higher ([Download](https://nodejs.org/))
+- **Trading Platform**: MetaTrader 5 (MT5) with "Allow Algorithmic Trading" enabled.
 
 ---
 
-## 🛠️ Option 2: Development Setup (Source Code)
-Use this if you want to modify the code or run in development mode.
+## 🚀 Step-by-Step Installation
 
-### 1. Prerequisites
-Ensure the following are installed on the new machine:
-- [Python 3.10 or higher](https://www.python.org/downloads/)
-- [Node.js 18 or higher](https://nodejs.org/)
-- [MetaTrader 5](https://www.metatrader5.com/en/download)
+### 1. Clone or Copy the Code
+Ensure the folder structure is maintained exactly as:
+```text
+kingin-master/
+├── backend/
+└── frontend/
+```
 
-### 2. Backend Setup
-1.  Open a terminal in the `backend/` folder.
-2.  Install Python dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  Ensure your `.env` file exists in the `backend/` folder (copy from `.env.example` if available).
+### 2. Backend Environment Setup
+Open a terminal in the `backend/` directory:
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-### 3. Frontend Setup
-1.  Open a terminal in the `frontend/` folder.
-2.  Install Node.js dependencies:
-    ```bash
-    npm install
-    ```
+### 3. Frontend Environment Setup
+Open a terminal in the `frontend/` directory:
+```powershell
+cd frontend
+npm install
+```
 
-### 4. Running the System
-You can launch the entire system using the master script in the root directory:
-- Run **`START_SYSTEM.bat`** (Starts both the FastAPI backend and Vite frontend).
+### 4. Configuration (`.env`)
+Create a `.env` file in the `backend/` directory (you can use `.env.example` as a template). 
+**CRITICAL**: Set your `KINGIN_USER_PASSWORD`. This is what you will use to log into the dashboard.
 
----
-
-## 🔐 MT5 Connection Requirements
-For the Trading Engine to talk to your broker:
-1.  In MT5, go to **Tools > Options > Expert Advisors**.
-2.  Check **"Allow Algorithmic Trading"**.
-3.  Check **"Allow DLL imports"**.
-4.  Ensure the **HedgeEA** is attached to at least one chart (e.g., XAUUSD).
-
----
-
-## 📁 Project Structure
-- `backend/`: Python API, Trading Engine, and Configurations.
-- `frontend/`: React Dashboard and Electron Shell.
-- `dist_electron/`: Contains the final compiled executable.
+```env
+KINGIN_USER_PASSWORD="your_secure_password"
+MT5_LOGIN=12345678
+MT5_PASSWORD="mt5_password"
+MT5_SERVER="Broker-Server"
+```
 
 ---
 
-## 🔧 Troubleshooting
-- **Connection Failed:** Ensure `python` is typed correctly in your terminal. If `python` command is not found, the EXE cannot spawn the backend.
-- **Empty Dashboard:** Check `backend/storage/logs/engine_live.log` for any engine-level errors.
-- **Proxy Errors:** Ensure no other service is using ports **8088** or **5000**.
+## ⚡ Running the System
+
+### Standard Launch
+Double-click the `START_SYSTEM.bat` file in the root directory. This script will:
+1.  Check for Python and Node.js.
+2.  Start the Backend API (Port 8088).
+3.  Perform a health check until the API is responsive.
+4.  Launch the Frontend Dashboard (Vite).
+
+### Production Build
+If you want to generate a standalone Windows executable:
+1.  Go to `frontend/`.
+2.  Run `npm run electron:build`.
+3.  The installer will be generated in `frontend/dist_electron/`.
+
+---
+
+## 📂 Machine-to-Machine Transfer
+
+To move KingIn to another computer, follow these steps to ensure a "seamless" transition:
+
+1.  **Copy the Folder**: Copy the entire `kingin-master` folder to the new machine.
+2.  **External dependencies**: Ensure Python 3.10+ and Node.js 18+ are installed on the target machine.
+3.  **Update .env**: On the new machine, open `backend/.env` and verify the MT5 credentials and `KINGIN_USER_PASSWORD` are correct for that specific machine/user.
+4.  **Re-run Installers**: Run `START_SYSTEM.bat`. The system is designed to automatically detect and install missing Python packages on first launch.
+5.  **MT5 Permissions**: Ensure MetaTrader 5 on the new machine has **"Allow Algorithmic Trading"** and **"Allow DLL imports"** checked in `Tools > Options > Expert Advisors`.
+
+---
+
+## 🤖 ML Layer Constant Learning
+
+The system is designed to learn constantly from live market data:
+- **Trade Logging**: Every trade taken is recorded in `backend/data/trade_log.json`.
+- **Online Learning**: The `RiverDriftMonitor` updates after *every closed trade*, adjusting the signal confidence based on recent performance.
+- **Weekly Retraining**: The core LightGBM model is scheduled to retrain every **Sunday at 23:00 EAT** using the latest historical data.
+- **Persistence**: Models are saved in the `backend/models/` folder. When moving machines, ensure you copy this folder to keep your system's "memory."
+
+---
+
+## ❓ Troubleshooting
+
+- **Port Conflict**: If port 8088 or 5173 is in use, the system will fail to start. Check for other running instances.
+- **MT5 Connection**: If the dashboard shows "MT5 DISCONNECTED", verify that the MT5 terminal is open and the credentials in `.env` are correct.
+- **Execution Error**: Check `backend/storage/logs/engine_stdout.log` for detailed backend error messages.

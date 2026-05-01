@@ -27,7 +27,11 @@ if (isElectron) {
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('kingin_jwt');
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  config.headers['X-Control-Token'] = 'replit-local-control';
+
+  // Control token is stored after login — never hard-coded in the bundle.
+  const ctrl = localStorage.getItem('kingin_ctrl');
+  if (ctrl) config.headers['X-Control-Token'] = ctrl;
+
   return config;
 });
 

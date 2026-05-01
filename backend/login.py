@@ -314,15 +314,15 @@ class LoginScreen:
     def _write_runtime_creds(self, account: int, password: str, server: str):
         """
         Write runtime_credentials.json — gitignored, never committed.
-        Password lives only in this local file + RAM during the session.
-        The engine reads this file on startup to get the live password.
+        Only stores login and server; password stays in RAM for the session.
+        The engine reads MT5 credentials directly from the active MT5 session,
+        not from this file, so the password does not need to be persisted.
         """
         import stat
         rt_path = os.path.join(BASE_DIR, "runtime_credentials.json")
         try:
             with open(rt_path, "w") as f:
-                json.dump({"login": account, "password": password,
-                           "server": server}, f, indent=2)
+                json.dump({"login": account, "server": server}, f, indent=2)
             try:
                 os.chmod(rt_path, stat.S_IRUSR | stat.S_IWUSR)
             except Exception:

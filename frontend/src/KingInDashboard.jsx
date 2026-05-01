@@ -480,12 +480,16 @@ const useAccountStats = (engineState, connected) => {
 
 const useMarketPrices = () => {
   const [prices, setPrices] = useState(generateMarketPrices());
-  const [prevPrices, setPrevPrices] = useState(generateMarketPrices());
-  
+  const prevPricesRef = useRef(generateMarketPrices());
+
+  // Expose a stable snapshot of previous prices for flash comparison
+  const [prevPrices, setPrevPricesState] = useState(generateMarketPrices());
+
   useEffect(() => {
-    setPrevPrices(prices);
+    // Run interval only once — NOT in [prices] dep array (that caused re-creation every tick)
     const interval = setInterval(() => {
       setPrices(prev => {
+        prevPricesRef.current = prev;  // capture before update
         const updated = { ...prev };
         Object.keys(updated).forEach(symbol => {
           const spread = updated[symbol].spread / 100000;
@@ -499,9 +503,11 @@ const useMarketPrices = () => {
         });
         return updated;
       });
+      // Sync the state snapshot for flash rendering
+      setPrevPricesState(prevPricesRef.current);
     }, 1000);
     return () => clearInterval(interval);
-  }, [prices]);
+  }, []);  // empty deps — interval created once
   
   const getFlashClass = (symbol, field) => {
     const curr = prices[symbol]?.[field];
@@ -760,7 +766,9 @@ const PositionsPanel = ({ positions }) => {
   
   const totalExposure = positions.reduce((sum, p) => sum + p.volume * p.openPrice * 100000, 0);
   const totalFloatingPnl = positions.reduce((sum, p) => sum + p.pnl, 0);
-  const avgDuration = positions.reduce((sum, p) => sum + (Date.now() - p.openTime), 0) / positions.length;
+  const avgDuration = positions.length > 0
+    ? positions.reduce((sum, p) => sum + (Date.now() - p.openTime), 0) / positions.length
+    : 0;
   
   return (
     <div className="panel-content">

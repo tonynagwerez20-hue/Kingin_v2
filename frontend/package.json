@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:api": "cd ../backend && python kingin_api.py",
-    "dev:vite": "vite --port 5000 --host 0.0.0.0",
+    "dev:vite": "vite --port 5173 --host 127.0.0.1",
     "dev:electron": "wait-on http://127.0.0.1:5173 && electron .",
     "build": "vite build && node -e \"const fs=require('fs');const f='dist/index.html';fs.writeFileSync(f, fs.readFileSync(f,'utf8').replace(/ crossorigin/gi, ''))\"",
     "electron:build": "npm run build && electron-builder",
