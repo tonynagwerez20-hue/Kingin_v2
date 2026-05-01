@@ -187,7 +187,7 @@ export function useSystemLogsWebSocket() {
     url: 'ws://localhost:8080/stream',
     onMessage: (message) => {
       if (message.type === 'LOG') {
-        setLogs((prev) => [message, ...prev].slice(0, 500));
+        setLogs((prev: WebSocketMessage[]) => [message, ...prev].slice(0, 500));
       }
     },
   });

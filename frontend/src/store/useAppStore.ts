@@ -27,7 +27,7 @@ interface AppStore {
   setRefreshInterval: (interval: 1000 | 2000 | 5000) => void;
 }
 
-export const useAppStore = create<AppStore>((set) => ({
+export const useAppStore = create<AppStore>()((set) => ({
   activePanel: 'overview',
   setActivePanel: (panel: PanelType) => set({ activePanel: panel }),
   
