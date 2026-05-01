@@ -1,0 +1,40 @@
+{
+  "weights": {
+    "ob_strength": 0.0011939108991103314,
+    "fvg_present": 0.37661190315558235,
+    "bos_aligned": 0.003916198566432696,
+    "liquidity_swept": 0.379135398581786,
+    "adr_pct": -0.11943003151110453,
+    "pips_to_liquidity": -0.3157588489803066,
+    "session": 0.0039058586986462688,
+    "htf_bias": -0.00891939647541638
+  },
+  "threshold": 0.42105263157894735,
+  "min_score": -0.4350923088026382,
+  "max_score": 0.7229508574996433,
+  "model_type": "weighted_average",
+  "win_rate": 0.6972650110028293,
+  "n_samples": 3181,
+  "feature_keys": [
+    "ob_strength",
+    "fvg_present",
+    "bos_aligned",
+    "liquidity_swept",
+    "adr_pct",
+    "pips_to_liquidity",
+    "session",
+    "htf_bias"
+  ],
+  "training_accuracy": 0.7771141150581579,
+  "trained_at": "2026-04-12T12:04:07.845462",
+  "data_duration": "20-year equivalent",
+  "data_sources": [
+    "8-year H1 historical",
+    "6-month M5/M15/H1/H4",
+    "synthetic patterns"
+  ],
+  "improvement_vs_6mo": {
+    "samples_multiplier": 2.48,
+    "accuracy_change": "-18.31%"
+  }
+}

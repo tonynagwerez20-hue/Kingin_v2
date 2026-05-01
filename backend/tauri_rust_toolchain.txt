@@ -1,0 +1,16 @@
+﻿rustc 1.94.1 (e408947bf 2026-03-25)
+cargo 1.94.1 (29ea6fb6a 2026-03-24)
+Default host: x86_64-pc-windows-msvc
+rustup home:  C:\Users\LENOVO\.rustup
+
+installed toolchains
+--------------------
+stable-x86_64-pc-windows-msvc (active, default)
+
+active toolchain
+----------------
+name: stable-x86_64-pc-windows-msvc
+active because: it's the default toolchain
+installed targets:
+  x86_64-pc-windows-msvc
+target removed

@@ -1,0 +1,129 @@
+This document provides a comprehensive technical reference for the Direct Trading Connection (DTC) protocol implementation within the Hedge Trading System. It covers packet structures, handshake sequencing, encoding nuances, and operational trade-offs.
+
+## 1. Architectural Foundation
+
+### The Real-Time Problem
+Trading data requires ultra-low latency. The DTC protocol achieves this using a **persistent, bidirectional TCP stream**. Unlike REST or polling-based APIs, DTC pushes data the moment it occurs on the server.
+
+*   **Asynchronous Listener Pattern:** To prevent the TCP receive buffer from filling (which leads to backpressure and connection drops by Sierra Chart), the system employs dedicated listener threads (`_listen_loop`). 
+*   **Decoupled Processing:** The listener thread's only job is to deserialize packets and place them into a thread-safe structure (Shared Memory or internal queues). Heavy computation (e.g., indicator calculation) must never occur on the listener thread.
+*   **Defensive Parsing (v2.3.0):** The system now handles missing `RecordCount` in Message Type 801 (Historical Data Header) gracefully, avoiding loop-crashes when Sierra Chart omits this field in JSON/VLS formats.
+*   **Sequential History Sync:** Requests for M5 (300s), M15 (900s), and H1 (3600s) are processed strictly in order.
+
+---
+
+## 2. Handshake & Encoding Specification
+
+The connection sequence is a rigid 4-step state machine. Skipping a step or sending a mismatching packet will result in immediate disconnection.
+
+### Sequence Diagram
+sequenceDiagram
+    participant C as Hedge Client
+    participant S as Sierra Chart
+    Note over C,S: Initial TCP Connection to 127.0.0.1
+    C->>S: EncodingRequest (Fixed Format, Payload=VLS)
+    S-->>C: EncodingResponse (Fixed Format)
+    Note over C: Client Verifies EncodingResponse Type 7
+    C->>S: LogonRequest (VLS Formatted)
+    S-->>C: LogonResponse (Status 1 = Success)
+    Note over C,S: Stream Active: Heartbeats & Sequential History Starts
+    C->>S: HistoricalPriceDataRequest (M5, M15, H1)
+    S-->>C: HistoricalPriceDataRecord (Sequential delivery)
+    Note over C: Buffers Populated -> LIVE State
+
+
+### Binary VLS (Encoding 6) vs. Binary Fixed (Encoding 1)
+Modern Sierra Chart versions prioritize **VLS (Variable Length Strings)**.
+- **Binary Fixed:** Every string field occupies a constant buffer (e.g., 32 bytes). If the string is shorter, it is null-padded. If longer, it is truncated.
+- **Binary VLS:** Strings are prefixed with a 4-byte unsigned integer indicating the length. Fields follow each other immediately without padding.
+
+> [!CAUTION]
+> **Offset Corruption:** If you send a `Binary Fixed` logon to a `VLS` server, the server will read the first 4 bytes of your fixed-width username as the "length prefix." Since usernames often start with high-ASCII or non-zero characters, the server will try to allocate gigabytes of RAM or read past the buffer, triggering a protocol error (Result -65484).
+
+---
+
+## 3. Packet Structures (VLS Format)
+
+### Header (Common to all packets)
+| Offset | Type | Description |
+| :--- | :--- | :--- |
+| 0 | `uint16` | **Size:** Total size of the packet including this header. |
+| 2 | `uint16` | **Type:** Message identifier (e.g., 1 for Logon). |
+
+### LogonRequest (Type 1)
+| Data Type | Field Name | Notes |
+| :--- | :--- | :--- |
+| `int32` | ProtocolVersion | Must match Sierra Chart's required version (currently 8). |
+| `vls_string` | Username | Length-prefixed string. |
+| `vls_string` | Password | Length-prefixed string. |
+| `vls_string` | GeneralTextData | Often used for specific broker flags. |
+| `int32` | Integer_1 | Reserved / Flags. |
+| `int32` | Integer_2 | Reserved / Flags. |
+| `int32` | HeartbeatInterval | Suggested interval in seconds. |
+| `vls_string` | TradeAccount | The specific account to bind to. |
+| `vls_string` | HardwareIdentifier | Unique machine ID. |
+| `vls_string` | ClientName | e.g., "HedgeAgent Client". |
+
+---
+
+## 4. Operational Troubleshooting
+
+### Status & Result Codes
+| Code | Label | Root Cause | Fix |
+| :--- | :--- | :--- | :--- |
+| **52** | Auth REJECTED | IP mismatch or missing password. Sierra Chart sees `::1` for "localhost". | Use **127.0.0.1** to match "Local Computer Only" rule. |
+| **-65484** | Encoding Mismatch | Server expected VLS but received Fixed (or vice versa). | Ensure `EncodingRequest` is Fixed-Format bootstrap. |
+| **Connection Refused** | Port Closed | Sierra Chart DTC server is not enabled. | Go to `Global Settings -> DTC Server Settings`. |
+| **Heartbeat Timeout** | Processing Lag | Main thread is blocking the listener from sending HBs. | Use `asyncio` or dedicated listener threads. |
+
+---
+
+## 5. Data Sourcing Comparison
+
+The system allows toggling between **Real-time DTC** and **CSV Batch Polling**. This choice creates a critical trade-off between speed and reliability.
+
+### Deep Dive: CSV Sourcing Logic
+In CSV mode, the system monitors a filesystem directory for exports generated by Sierra Chart.
+
+| Factor | DTC Streaming (Active) | CSV Polling (Passive) |
+| :--- | :--- | :--- |
+| **Latency** | < 1 ms (Network bound) | 100ms - 1000ms (Disk bound) |
+| **Reliability** | Medium (Network drops, heartbeats) | High (Local files don't disconnect) |
+| **Data Integrity** | Perfect (Sequence IDs enforced) | Risk of "torn reads" if writing/reading simultaneously. |
+| **System Load** | Low (Constant small packets) | High (Periodic large file scans/diffs) |
+
+#### **Positive Consequences of Hybrid Mode**
+1.  **Precise Orderflow Audits:** By utilizing CSV columns 18 (Delta), 25 (Max Delta), and 26 (Min Delta), the system gains institutional-grade precision that pure simulated delta cannot match.
+2.  **Air-Gapped Operation:** If the DTC server crashes, CSV mode allows the strategy to keep running on the last available data without triggering reconnection loops.
+3.  **Backtesting Parity:** The data processed in real-time is identical to the data used during historical optimization.
+
+#### **Negative Consequences of CSV Mode**
+1.  **Disk I/O Choke:** On systems without NVMe storage, heavy CSV writes can cause high I/O wait, making the OS feel sluggish and delaying trade execution commands.
+2.  **Lack of State Feedback:** CSV files usually only contain price data. DTC contains a rich state (Order IDs, Margin, Connectivity Status) that is lost in file-based modes.
+
+---
+
+## 6. System Evolution & Optimization Roadmap
+
+To evolve from a standard bot to an institutional-grade platform, the following strategic improvements are recommended:
+
+### Phase 1: High-Performance Architecture
+*   **Event-Driven Migration:** Decouple data ingestion from execution using `asyncio.Queue` (Producer-Consumer pattern).
+*   **Expanded Shared Memory:** Use `MarketDataSHM` as the master state for regime, balance, and open signals to eliminate ZMQ queue lag.
+
+### Phase 2: Institutional Risk Modeling
+*   **Monte Carlo Simulations:** Run real-time probability paths for drawdowns to auto-hedge positions before limits are hit.
+*   **Kelly Criterion Scaling:** Calculate lot sizes using the Kelly Criterion, weighted by specific strategy performance.
+*   **Microstructure Veto:** Block entries during extreme spread widening (>2x moving average).
+
+### Phase 3: Alpha & Logic Refinement
+*   **Multi-TF CVD Slope:** Only enter when M5 CVD aligns with the H1 grand flow.
+*   **Fractal Zone Engine:** Automate the mapping of supply/demand levels based on historical high-volume rejection nodes.
+
+### Phase 4: Observability & Transparency
+*   **Audit Dashboard:** Expose the `cro_rules` decision trail to the UI so users see exactly *why* signals were vetoed.
+*   **Tick-to-Trade Monitoring:** Track precision latency from **Packet Arrival -> Signal Gen -> MT5 Acknowledgment**.
+
+---
+*Document Version: 2.3.0*
+*Last Technical Review: 2026-02-02*

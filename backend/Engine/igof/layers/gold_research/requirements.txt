@@ -1,0 +1,17 @@
+# Gold Research Strategy - Dependencies
+# ========================================
+# Lightweight requirements optimized for i3/4GB RAM constraint
+# 
+# Installation:
+#     pip install -r gold_research_strategy/requirements.txt
+
+# Core dependencies
+numpy>=1.21.0
+pandas>=1.3.0
+
+# Machine Learning (Scikit-Learn)
+# Using HistGradientBoostingRegressor for memory efficiency
+scikit-learn>=1.0.0
+
+# Optional: For enhanced performance (install only if needed)
+# scipy>=1.7.0  # Required for some sklearn functions

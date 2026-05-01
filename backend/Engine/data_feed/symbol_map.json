@@ -1,0 +1,26 @@
+{
+    "XAUUSD": [
+        "XAUUSD", "XAUUSD.i", "XAUUSD.x", "XAUUSDm",
+        "GOLD", "GOLD.i", "GOLD.x", "GOLDm",
+        "XAUUSDmicro", "GLD", "XAU", "XAUUSD_ECN",
+        "XAUUSDpro", "XAUUSDv", "XAUUSD#", "XAUUSD_",
+        "Gold", "XAU_USD", "XAU/USD", "GOLD_PRO",
+        "Au", "AUUSD", "XAUUSD.t",
+        "XAUUSD-E", "XAUUSDm.E", "GOLD.E",
+        "XAUUSDm.", "XAU.", "GOLD.",
+        "XAUUSD_i", "XAUUSD_x", "GOLD_i", "GOLD_x",
+        "GOLD#", "XAU#", "XAUUSDmicro.", "GOLDmicro"
+    ],
+    "EURUSD": [
+        "EURUSD", "EURUSD.i", "EURUSD.x", "EURUSDm", "EURUSD.e", "EURUSD.c"
+    ],
+    "GBPUSD": [
+        "GBPUSD", "GBPUSD.i", "GBPUSD.x", "GBPUSDm", "GBPUSD.e", "GBPUSD.c"
+    ],
+    "US30": [
+        "US30", "WS30", "DJI", "DJ30", "US30.cash"
+    ],
+    "NAS100": [
+        "NAS100", "USTEC", "NAS100.cash", "NQ100"
+    ]
+}

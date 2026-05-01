@@ -1,0 +1,20 @@
+# Institutional Trading System - Core Dependencies
+fastapi
+uvicorn[standard]
+websockets
+pandas
+aiohttp
+pyzmq
+matplotlib
+streamlit
+python-dotenv
+pydantic
+requests
+scipy
+numpy
+plotly
+MetaTrader5
+rich
+cryptography
+click
+colorama

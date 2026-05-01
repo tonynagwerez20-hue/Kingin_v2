@@ -1,0 +1,49 @@
+{
+    "pipeline": {
+        "data_provider": {
+            "config": {
+                "login": null,
+                "password": "",
+                "server": null,
+                "broker": null,
+                "auto_detect": true,
+                "balance": null,
+                "leverage": null
+            }
+        }
+    },
+    "trading": {
+        "master_switch": true,
+        "symbol": "XAUUSD",
+        "lot_size": 0.01,
+        "max_open_trades": 1,
+        "risk_percent": 1.0,
+        "execution_type": "MARKET",
+        "sl_buffer_pips": 2.0,
+        "tp_multiplier": 2.0
+    },
+    "dashboard": {
+        "enable_streamlit_dashboard": false,
+        "enable_react_dashboard": false
+    },
+    "enable_streamlit_dashboard": false,
+    "enable_react_dashboard": false,
+    "filters": {
+        "killzone_filter": true,
+        "news_filter": true,
+        "session": "london_new_york"
+    },
+    "layers": {
+        "KillzoneFilterLayer": true,
+        "MechanicalStructureLayer": true,
+        "LiquiditySweepLayer": true,
+        "DisplacementLayer": true,
+        "FVGDiscountLayer": true,
+        "MicroMSSLayer": true,
+        "NewsEventLayer": true
+    },
+    "confluence": {
+        "min_score": 5.0,
+        "max_score": 7.0
+    }
+}

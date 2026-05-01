@@ -1,0 +1,74 @@
+# Python stuff
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Environment files (SENSITIVE)
+.env
+env.local
+env.development.local
+env.test.local
+env.production.local
+
+# Databases & State (SENSITIVE)
+*.db
+*.sqlite3
+storage/risk_state/risk_state.json
+storage/logs/*.json
+data/hedge.db
+
+# Sierra Chart / Data Feeds
+data_feed/sierra_*.txt
+logs/
+
+# OS stuff
+.DS_Store
+Thumbs.db
+[Bb]hum.db
+
+# VS Code / IDE stuff
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MT5 Build stuff
+MQL5/Experts/*.ex5
+MQL5/Experts/*.ex4
+
+# Large backtest data files (Do not push raw CSVs)
+data/backtest/
+isignals_backtest.csv
+backtest_signals.csv
+performance_report.csv
+
+# Log files
+*.log
+output.log
+storage/logs/
+
+# ── ITS Desktop App — SECURITY EXCLUSIONS ────────────────────────────────────
+# NEVER commit credentials or live session data
+credentials.json
+runtime_credentials.json
+engine_state.json
+engine_state.tmp
+
+# Icon assets (generated at install time — not needed in repo)
+its_icon.ico
+its_icon.png
+
+# Scratch / temp tools
+_install_readme.py
+
+# MT5 trading config — password field must stay blank in repo
+# Actual password is entered at login and never written to disk
+# config/trading_params_lite.json is committed WITH password="" only
+node_modules
+dist
+dist_electron
+kingin-vite/dist

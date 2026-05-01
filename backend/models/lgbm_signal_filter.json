@@ -1,0 +1,36 @@
+{
+  "weights": {
+    "ob_strength": -0.06168772531083502,
+    "fvg_present": 0.9109914578588422,
+    "bos_aligned": 0,
+    "liquidity_swept": 0.9129858216188046,
+    "adr_pct": -0.2148143511115635,
+    "pips_to_liquidity": -0.5092571088550577,
+    "session": 0.04231659469262153,
+    "htf_bias": -0.00561095517283213
+  },
+  "threshold": 0.6842105263157894,
+  "min_score": -0.7490535457576669,
+  "max_score": 1.709541243615383,
+  "model_type": "weighted_average",
+  "win_rate": 0.6963309914129586,
+  "n_samples": 1281,
+  "feature_keys": [
+    "ob_strength",
+    "fvg_present",
+    "bos_aligned",
+    "liquidity_swept",
+    "adr_pct",
+    "pips_to_liquidity",
+    "session",
+    "htf_bias"
+  ],
+  "training_accuracy": 0.9601873536299765,
+  "trained_at": "2026-04-12T11:43:02.188094",
+  "timeframe_data_used": [
+    "M5",
+    "M15",
+    "H1",
+    "H4"
+  ]
+}

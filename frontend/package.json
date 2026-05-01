@@ -1,0 +1,63 @@
+{
+  "name": "kingin-institutional-trading",
+  "version": "1.0.0",
+  "description": "Institutional Trading System Native Desktop App",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:api": "cd ../backend && python kingin_api.py",
+    "dev:vite": "vite --port 5000 --host 0.0.0.0",
+    "dev:electron": "wait-on http://127.0.0.1:5173 && electron .",
+    "build": "vite build && node -e \"const fs=require('fs');const f='dist/index.html';fs.writeFileSync(f, fs.readFileSync(f,'utf8').replace(/ crossorigin/gi, ''))\"",
+    "electron:build": "npm run build && electron-builder",
+    "test": "cd ../backend && pytest Engine/tests"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.2",
+    "concurrently": "^8.2.2",
+    "electron": "^28.2.0",
+    "electron-builder": "^24.9.1",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.kingin.trading",
+    "productName": "KingIn Trading System",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!__pycache__",
+          "!tests",
+          "!*.log",
+          "!*.txt"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "its_icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

@@ -1,0 +1,488 @@
+
+> institutional-trading-system@1.0.0 tauri:build
+> tauri build
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+
+> institutional-trading-system@1.0.0 build
+> vite build
+
+[36mvite v8.0.8 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 19 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.54 kB │ gzip:  0.35 kB
+dist/assets/index-BEO_veu1.css   11.26 kB │ gzip:  2.72 kB
+dist/assets/index-CJwsRi3r.js   184.33 kB │ gzip: 55.97 kB
+
+[33m[33m[PLUGIN_TIMINGS] Warning:[0m Your build spent significant time in plugins. Here is a breakdown:
+  - vite:css (38%)
+  - vite:build-html (22%)
+  - vite:css-post (19%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+[39m
+[32m✓ built in 8.22s[39m
+   Compiling time-macros v0.2.27
+   Compiling http v1.4.0
+   Compiling jsonptr v0.6.3
+   Compiling crypto-common v0.1.7
+error[E0786]: found invalid metadata files for crate `time_core`
+ --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\date.rs:5:5
+  |
+5 | use time_core::util::{days_in_year, weeks_in_year};
+  |     ^^^^^^^^^
+  |
+  = note: corrupt metadata encountered in \\?\C:\Users\LENOVO\Desktop\kingin-master\src-tauri\target\release\deps\libtime_core-02776845736afdb6.rlib
+
+error[E0433]: failed to resolve: use of undeclared type `Minute`
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\offset.rs:62:26
+    |
+ 62 |     } else if minutes >= Minute::per_t(Hour) {
+    |                          ^^^^^^ use of undeclared type `Minute`
+    |
+note: these structs exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:130:11
+    |
+130 |           $($vis struct $variant {
+    |             ^^^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Minute`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\modifier.rs:16:9
+    |
+ 16 |           $struct_vis struct $struct_name {$(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::modifier::Minute`: not accessible
+...
+171 | / to_tokens! {
+172 | |     pub(crate) struct Minute {
+173 | |         pub(crate) padding: Padding = Padding::Zero,
+174 | |     }
+175 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `to_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0425]: cannot find value `Hour` in this scope
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\offset.rs:62:40
+    |
+ 62 |     } else if minutes >= Minute::per_t(Hour) {
+    |                                        ^^^^ not found in this scope
+    |
+note: these tuple variants exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:127:15
+    |
+127 |               $($variant($variant),)*
+    |                 ^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Component::Hour`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\component.rs:9:13
+    |
+  9 |               $name(modifier::$name),
+    |               ^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::Component::Hour`: not accessible
+...
+ 32 | / declare_component! {
+ 33 | |     Day
+ 34 | |     Month
+ 35 | |     Ordinal
+...   |
+ 49 | |     End
+ 50 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `declare_component` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: failed to resolve: use of undeclared type `Second`
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\offset.rs:69:26
+    |
+ 69 |     } else if seconds >= Second::per_t(Minute) {
+    |                          ^^^^^^ use of undeclared type `Second`
+    |
+note: these structs exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:130:11
+    |
+130 |           $($vis struct $variant {
+    |             ^^^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Second`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\modifier.rs:16:9
+    |
+ 16 |           $struct_vis struct $struct_name {$(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::modifier::Second`: not accessible
+...
+184 | / to_tokens! {
+185 | |     pub(crate) struct Second {
+186 | |         pub(crate) padding: Padding = Padding::Zero,
+187 | |     }
+188 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `to_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a trait with a similar name exists
+    |
+ 69 -     } else if seconds >= Second::per_t(Minute) {
+ 69 +     } else if seconds >= Send::per_t(Minute) {
+    |
+
+error[E0425]: cannot find value `Minute` in this scope
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\offset.rs:69:40
+    |
+ 69 |     } else if seconds >= Second::per_t(Minute) {
+    |                                        ^^^^^^
+    |
+note: these tuple variants exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:127:15
+    |
+127 |               $($variant($variant),)*
+    |                 ^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Component::Minute`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\component.rs:9:13
+    |
+  9 |               $name(modifier::$name),
+    |               ^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::Component::Minute`: not accessible
+...
+ 32 | / declare_component! {
+ 33 | |     Day
+ 34 | |     Month
+ 35 | |     Ordinal
+...   |
+ 49 | |     End
+ 50 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `declare_component` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a local variable with a similar name exists
+    |
+ 69 -     } else if seconds >= Second::per_t(Minute) {
+ 69 +     } else if seconds >= Second::per_t(minutes) {
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Hour`
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:76:16
+    |
+ 76 |     if hour >= Hour::per_t(Day) {
+    |                ^^^^ use of undeclared type `Hour`
+    |
+note: these structs exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:130:11
+    |
+130 |           $($vis struct $variant {
+    |             ^^^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Hour`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\modifier.rs:16:9
+    |
+ 16 |           $struct_vis struct $struct_name {$(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::modifier::Hour`: not accessible
+...
+164 | / to_tokens! {
+165 | |     pub(crate) struct Hour {
+166 | |         pub(crate) padding: Padding = Padding::Zero,
+167 | |         pub(crate) is_12_hour_clock: bool = false,
+168 | |     }
+169 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `to_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0425]: cannot find value `Day` in this scope
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:76:28
+    |
+ 76 |     if hour >= Hour::per_t(Day) {
+    |                            ^^^ not found in this scope
+    |
+note: these tuple variants exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:127:15
+    |
+127 |               $($variant($variant),)*
+    |                 ^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Component::Day`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\component.rs:9:13
+    |
+  9 |               $name(modifier::$name),
+    |               ^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::Component::Day`: not accessible
+...
+ 32 | / declare_component! {
+ 33 | |     Day
+ 34 | |     Month
+ 35 | |     Ordinal
+...   |
+ 49 | |     End
+ 50 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `declare_component` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: failed to resolve: use of undeclared type `Minute`
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:83:25
+    |
+ 83 |     } else if minute >= Minute::per_t(Hour) {
+    |                         ^^^^^^ use of undeclared type `Minute`
+    |
+note: these structs exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:130:11
+    |
+130 |           $($vis struct $variant {
+    |             ^^^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Minute`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\modifier.rs:16:9
+    |
+ 16 |           $struct_vis struct $struct_name {$(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::modifier::Minute`: not accessible
+...
+171 | / to_tokens! {
+172 | |     pub(crate) struct Minute {
+173 | |         pub(crate) padding: Padding = Padding::Zero,
+174 | |     }
+175 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `to_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0425]: cannot find value `Hour` in this scope
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:83:39
+    |
+ 83 |     } else if minute >= Minute::per_t(Hour) {
+    |                                       ^^^^
+    |
+note: these tuple variants exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:127:15
+    |
+127 |               $($variant($variant),)*
+    |                 ^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Component::Hour`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\component.rs:9:13
+    |
+  9 |               $name(modifier::$name),
+    |               ^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::Component::Hour`: not accessible
+...
+ 32 | / declare_component! {
+ 33 | |     Day
+ 34 | |     Month
+ 35 | |     Ordinal
+...   |
+ 49 | |     End
+ 50 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `declare_component` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a local variable with a similar name exists
+    |
+ 83 -     } else if minute >= Minute::per_t(Hour) {
+ 83 +     } else if minute >= Minute::per_t(hour) {
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Second`
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:90:25
+    |
+ 90 |     } else if second >= Second::per_t(Minute) {
+    |                         ^^^^^^ use of undeclared type `Second`
+    |
+note: these structs exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:130:11
+    |
+130 |           $($vis struct $variant {
+    |             ^^^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Second`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\modifier.rs:16:9
+    |
+ 16 |           $struct_vis struct $struct_name {$(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::modifier::Second`: not accessible
+...
+184 | / to_tokens! {
+185 | |     pub(crate) struct Second {
+186 | |         pub(crate) padding: Padding = Padding::Zero,
+187 | |     }
+188 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `to_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a trait with a similar name exists
+    |
+ 90 -     } else if second >= Second::per_t(Minute) {
+ 90 +     } else if second >= Send::per_t(Minute) {
+    |
+
+error[E0425]: cannot find value `Minute` in this scope
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:90:39
+    |
+ 90 |     } else if second >= Second::per_t(Minute) {
+    |                                       ^^^^^^
+    |
+note: these tuple variants exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:127:15
+    |
+127 |               $($variant($variant),)*
+    |                 ^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Component::Minute`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\component.rs:9:13
+    |
+  9 |               $name(modifier::$name),
+    |               ^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::Component::Minute`: not accessible
+...
+ 32 | / declare_component! {
+ 33 | |     Day
+ 34 | |     Month
+ 35 | |     Ordinal
+...   |
+ 49 | |     End
+ 50 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `declare_component` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a local variable with a similar name exists
+    |
+ 90 -     } else if second >= Second::per_t(Minute) {
+ 90 +     } else if second >= Second::per_t(minute) {
+    |
+
+error[E0425]: cannot find value `Second` in this scope
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:102:68
+    |
+102 |             nanosecond: (second.fract() * Nanosecond::per_t::<f64>(Second)).round() as u32,
+    |                                                                    ^^^^^^
+    |
+note: these items exist but are inaccessible
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\format_item.rs:127:15
+    |
+127 |               $($variant($variant),)*
+    |                 ^^^^^^^^^^^^^^^^^^ `crate::format_description::format_item::Component::Second`: not accessible
+...
+205 | / component_definition! {
+206 | |     pub(super) enum Component {
+207 | |         Day = "day" {
+208 | |             padding = "padding": Option<Padding> => padding,
+...   |
+273 | | }
+    | |_- in this macro invocation
+...
+305 |               $($(#[$attr])? $variant),*
+    |                              ^^^^^^^^ `crate::format_description::format_item::UnixTimestampPrecision::Second`: not accessible
+...
+328 | / modifier! {
+329 | |     enum HourBase(bool) {
+330 | |         Twelve(true) = b"12",
+331 | |         #[default]
+...   |
+446 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\component.rs:9:13
+    |
+  9 |               $name(modifier::$name),
+    |               ^^^^^^^^^^^^^^^^^^^^^^ `crate::format_description::public::Component::Second`: not accessible
+...
+ 32 | / declare_component! {
+ 33 | |     Day
+ 34 | |     Month
+ 35 | |     Ordinal
+...   |
+ 49 | |     End
+ 50 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\format_description\public\modifier.rs:62:13
+    |
+ 62 |               $variant_name
+    |               ^^^^^^^^^^^^^ `crate::format_description::public::modifier::UnixTimestampPrecision::Second`: not accessible
+...
+250 | / to_tokens! {
+251 | |     pub(crate) enum UnixTimestampPrecision {
+252 | |         Second,
+253 | |         Millisecond,
+...   |
+257 | | }
+    | |_- in this macro invocation
+    = note: this error originates in the macro `component_definition` which comes from the expansion of the macro `to_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a local variable with a similar name exists (notice the capitalization)
+    |
+102 -             nanosecond: (second.fract() * Nanosecond::per_t::<f64>(Second)).round() as u32,
+102 +             nanosecond: (second.fract() * Nanosecond::per_t::<f64>(second)).round() as u32,
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Nanosecond`
+   --> C:\Users\LENOVO\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\time-macros-0.2.27\src\time.rs:102:43
+    |
+102 |             nanosecond: (second.fract() * Nanosecond::per_t::<f64>(Second)).round() as u32,
+    |                                           ^^^^^^^^^^ use of undeclared type `Nanosecond`
+    |
+help: there is an enum variant `crate::format_description::format_item::UnixTimestampPrecision::Nanosecond` and 1 other; try using the variant's enum
+    |
+102 -             nanosecond: (second.fract() * Nanosecond::per_t::<f64>(Second)).round() as u32,
+102 +             nanosecond: (second.fract() * crate::format_description::format_item::UnixTimestampPrecision::per_t::<f64>(Second)).round() as u32,
+    |
+102 -             nanosecond: (second.fract() * Nanosecond::per_t::<f64>(Second)).round() as u32,
+102 +             nanosecond: (second.fract() * crate::format_description::public::modifier::UnixTimestampPrecision::per_t::<f64>(Second)).round() as u32,
+    |
+
+Some errors have detailed explanations: E0425, E0433, E0786.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `time-macros` (lib) due to 13 previous errors
+warning: build failed, waiting for other jobs to finish...
+failed to build app: failed to build app
+       Error failed to build app: failed to build app

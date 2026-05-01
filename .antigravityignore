@@ -1,0 +1,10 @@
+data/
+venv_v2/
+venv_v3/
+venv_fix/
+__pycache__/
+*.csv
+*.json
+node_modules/
+dist/
+build/

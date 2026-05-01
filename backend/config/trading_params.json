@@ -1,0 +1,83 @@
+{
+    "trading": {
+        "symbol": "XAUUSD",
+        "pip_value": 0.01,
+        "pip_size": 0.01,
+        "default_account_balance": 10000,
+        "risk_per_trade_percent": 1.0,
+        "max_open_trades": 3,
+        "max_daily_loss_percent": 3.0,
+        "max_daily_trades": 10
+    },
+    "execution": {
+        "sl_pips": 20,
+        "sl_buffer_pips": 2,
+        "tp_pips": 60,
+        "risk_reward_ratio": 3.0,
+        "partial_tp_enabled": true,
+        "partial_tp_close_percent": 50,
+        "partial_tp_rr_trigger": 3.0,
+        "slippage_tolerance_pips": 2,
+        "max_spread_pips": 3.0,
+        "min_liquidity_threshold": 1000,
+        "comment": "SL = 2 pips below liquidity event. Partial TP: Close 50% at 3R."
+    },
+    "igof_v1": {
+        "layer1_h1_bias": {
+            "min_score": 2,
+            "max_score": 3,
+            "displacement_multiplier": 1.5,
+            "candle_maturity_seconds": 3300,
+            "comment": "H1 Structural Bias: BOS, Displacement, Imbalance. Maturity = 55 min (3300s)"
+        },
+        "layer2_zone_quality": {
+            "min_score": 3,
+            "max_score": 5,
+            "impulse_departure_threshold": 1.0,
+            "comment": "Zone Quality: Freshness, Impulse, Volume, Sweep, HTF Alignment"
+        },
+        "layer3_liquidity": {
+            "sweep_lookback_candles": 5,
+            "comment": "Liquidity Event: Sweep of previous N candles' high/low"
+        },
+        "layer4_microstructure": {
+            "displacement_threshold": 0.5,
+            "comment": "M5 Microstructure Shift: mBOS with displacement > threshold"
+        },
+        "layer5_displacement": {
+            "body_to_wick_ratio": 0.6,
+            "min_spread": 0.5,
+            "comment": "Displacement Validation: Large body, minimal wicks"
+        }
+    },
+    "session_filter": {
+        "enabled": true,
+        "start_hour_utc": 8,
+        "end_hour_utc": 21,
+        "comment": "London (08:00) through NY Close (21:00 UTC)"
+    },
+    "regime_adaptation": {
+        "enabled": false,
+        "trending_bias_adjustment": -1,
+        "ranging_bias_adjustment": 1,
+        "comment": "Adaptive thresholds based on market regime (TRENDING/RANGING)"
+    },
+    "risk_management": {
+        "kill_switch_enabled": false,
+        "regime_veto_enabled": true,
+        "cro_spread_check": true,
+        "cro_liquidity_check": true
+    },
+    "data_feed": {
+        "csv_batch_delay_seconds": 1.0,
+        "buffer_max_length": 500,
+        "dtc_host": "127.0.0.1",
+        "dtc_port_live": 11099,
+        "dtc_port_hist": 11098
+    },
+    "logging": {
+        "audit_log_enabled": true,
+        "performance_log_enabled": true,
+        "debug_mode": false
+    }
+}

@@ -1,0 +1,21 @@
+# Core engine
+fastapi
+uvicorn[standard]
+websockets
+pandas
+aiohttp
+pyzmq
+python-dotenv
+pydantic
+requests
+numpy
+MetaTrader5
+
+# CLI dashboard
+rich>=13.0.0
+
+# News layer (urllib is stdlib — no extra install needed)
+# Optional: finnhub-python only needed if using FinnHub fallback
+# finnhub-python
+
+# Lite React dashboard API endpoint (already covered by fastapi+uvicorn above)

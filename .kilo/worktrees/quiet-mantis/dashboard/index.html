@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HedgeEA · Live Terminal</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --bg:#0a0c0f;--bg1:#111418;--bg2:#181c22;--border:#1e242e;--border2:#252d38;
+  --text:#c8d0dc;--dim:#505a6a;--green:#00e676;--red:#ff3d5c;--yellow:#ffd740;
+  --blue:#40c4ff;--orange:#ff9100;--purple:#b388ff;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+
+/* Boot Screen Styles */
+.boot-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  font-family: var(--mono);
+}
+
+.boot-content {
+  text-align: center;
+  padding: 2rem;
+  background: rgba(10, 12, 15, 0.9);
+  border-radius: 12px;
+  border: 1px solid var(--border2);
+  box-shadow: 0 0 30px rgba(0, 230, 118, 0.3);
+}
+
+.boot-content h1 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(90deg, #fff 0%, #00e676 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 1.5rem;
+}
+
+.boot-status {
+  color: var(--text);
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  min-height: 2rem;
+}
+
+.progress-bar {
+  width: 300px;
+  height: 4px;
+  background: var(--bg2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 0 auto 1.5rem;
+}
+
+.progress {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.boot-details {
+  color: var(--dim);
+  font-size: 0.9rem;
+  text-align: left;
+  max-width: 400px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;overflow:hidden}
+#app{display:grid;height:100vh;grid-template-rows:44px 1fr 28px;grid-template-columns:1fr}
+#header{border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--bg1)}
+#main{display:grid;grid-template-columns:220px 1fr 260px;overflow:hidden}
+#footer{border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg1);font-size:11px;color:var(--dim)}
+#sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#centre{display:flex;flex-direction:column;overflow:hidden}
+#right{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.panel{border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0;position:relative;background:var(--bg1);transition:all 0.2s ease}
+.panel-title{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;font-family:var(--sans);display:flex;justify-content:space-between;align-items:center;cursor:grab}
+.panel-title:active{cursor:grabbing}
+.panel-title .collapse-btn{font-size:12px;color:var(--dim);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all 0.2s ease}
+.panel-title .collapse-btn:hover{background:rgba(255,255,255,0.1);color:var(--text)}
+.panel.collapsed{height:auto;min-height:38px}
+.panel.collapsed > *:not(.panel-title){display:none}
+.panel:last-child{border-bottom:none;flex:1;overflow-y:auto}
+.panel.dragging{opacity:0.8;pointer-events:none;z-index:100}
+.kv{display:flex;justify-content:space-between;align-items:baseline;padding:2px 0;font-size:12px}
+.kv .k{color:var(--dim);font-size:11px}.kv .v{font-weight:500}
+.pill{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-weight:600;letter-spacing:.05em}
+.pill-green{background:rgba(0,230,118,.15);color:var(--green);border:1px solid rgba(0,230,118,.3)}
+.pill-red{background:rgba(255,61,92,.15);color:var(--red);border:1px solid rgba(255,61,92,.3)}
+.pill-yellow{background:rgba(255,215,64,.12);color:var(--yellow);border:1px solid rgba(255,215,64,.25)}
+.pill-blue{background:rgba(64,196,255,.12);color:var(--blue);border:1px solid rgba(64,196,255,.25)}
+.pill-orange{background:rgba(255,145,0,.12);color:var(--orange);border:1px solid rgba(255,145,0,.25)}
+.pill-dim{background:rgba(80,90,106,.15);color:var(--dim);border:1px solid rgba(80,90,106,.25)}
+
+/* Panel Toggle Bar Styles */
+.panel-toggle-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.panel-toggle-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-1px);
+}
+
+.panel-toggle-btn.active {
+  background: var(--blue);
+  color: white;
+  border-color: var(--blue);
+  box-shadow: 0 0 10px rgba(64,196,255,0.3);
+}
+
+.panel-toggle-btn:active {
+  transform: translateY(0);
+}
+.layer-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)}
+.layer-row:last-child{border-bottom:none}
+.layer-name{flex:1;font-size:11px}.layer-score{font-size:10px;color:var(--dim);width:30px;text-align:right}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-on{background:var(--green);box-shadow:0 0 5px var(--green)}.dot-off{background:var(--red)}.dot-news{background:var(--yellow);box-shadow:0 0 5px var(--yellow)}
+#price-block{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:4px;border-bottom:1px solid var(--border)}
+#price-val{font-size:52px;font-weight:600;letter-spacing:-.02em;transition:color .2s}
+#price-chg{font-size:13px;letter-spacing:.04em}
+#bid-ask{display:flex;gap:24px;font-size:12px;color:var(--dim)}
+#chart-wrap{padding:8px 12px 4px;border-bottom:1px solid var(--border)}
+svg.sparkline{width:100%;height:60px;display:block}.spark-line{fill:none;stroke-width:1.5}.spark-area{opacity:.08}
+#signal-feed{flex:1;overflow-y:auto}
+.sig-row{display:flex;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border);font-size:11px}
+.sig-time{color:var(--dim);width:42px;flex-shrink:0;font-size:10px}.sig-type{width:64px;flex-shrink:0}
+.sig-detail{color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.news-row{display:flex;gap:6px;align-items:baseline;padding:3px 12px;border-bottom:1px solid var(--border);font-size:11px}
+.news-time{color:var(--dim);width:38px;flex-shrink:0;font-size:10px}.news-imp{width:20px;flex-shrink:0;text-align:center}
+.news-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.news-actual{color:var(--dim);font-size:10px;text-align:right;width:60px;flex-shrink:0}
+#conn-dot{width:6px;height:6px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:4px}
+#conn-dot.online{background:var(--green);box-shadow:0 0 4px var(--green)}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+@keyframes flicker{0%,100%{opacity:1}50%{opacity:.6}}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:6px;animation:flicker 1.6s ease-in-out infinite}
+@keyframes flashG{0%{color:var(--green)}100%{color:inherit}}@keyframes flashR{0%{color:var(--red)}100%{color:inherit}}
+.flash-g{animation:flashG .4s ease-out}.flash-r{animation:flashR .4s ease-out}
+#api-url-input{background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:2px;width:170px;outline:none}
+#api-url-input:focus{border-color:var(--blue)}
+</style>
+</head>
+<body>
+<div id="boot-screen" class="boot-screen">
+  <div class="boot-content">
+    <h1>HedgeEA</h1>
+    <p class="boot-status">Initializing system...</p>
+    <div class="progress-bar">
+      <div class="progress"></div>
+    </div>
+    <div class="boot-details"></div>
+  </div>
+</div>
+<div id="app">
+
+<div id="header">
+  <div style="display:flex;align-items:center;gap:10px">
+  <span class="live-dot"></span>
+  <span style="font-weight:600;font-size:14px;letter-spacing:.04em">HedgeEA</span>
+  <span style="color:var(--dim);font-size:11px">v6.2 · SMC Terminal</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px;font-size:11px">
+  <span id="master-badge" class="pill pill-green">MASTER ON</span>
+  <span id="regime-badge"></span>
+  <span style="color:var(--dim)" id="runtime-el">—</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);flex-wrap:wrap">
+  <div id="engine-controls">
+    <button id="start-btn" onclick="startEngine()" style="background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green);font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;cursor:pointer;letter-spacing:.05em">START</button>
+    <button id="stop-btn" onclick="stopEngine()" style="background:rgba(255,61,92,.12);border:1px solid rgba(255,61,92,.3);color:var(--red);font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;cursor:pointer;letter-spacing:.05em;margin-left:4px">STOP</button>
+    <button id="restart-btn" onclick="restartEngine()" style="background:rgba(64,196,255,.12);border:1px solid rgba(64,196,255,.3);color:var(--blue);font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;cursor:pointer;letter-spacing:.05em;margin-left:4px">RESTART</button>
+    <button id="settings-btn" onclick="openSettingsModal()" style="background:rgba(138,43,226,.12);border:1px solid rgba(138,43,226,.3);color:var(--purple);font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;cursor:pointer;letter-spacing:.05em;margin-left:4px">⚙ SETTINGS</button>
+    <span id="uptime-counter" style="margin-left:8px;font-family:var(--mono);">Uptime: 00:00:00</span>
+  </div>
+  <span id="conn-dot"></span><span id="conn-label">CONNECTING...</span>
+  <span id="clock-el"></span>
+</div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="panel">
+      <div class="panel-title">Account</div>
+      <div class="kv"><span class="k">Balance</span><span class="v" id="s-balance">—</span></div>
+      <div class="kv"><span class="k">Equity</span><span class="v" id="s-equity">—</span></div>
+      <div class="kv"><span class="k">Daily P&L</span><span class="v" id="s-pnl">—</span></div>
+      <div class="kv"><span class="k">Loss %</span><span class="v" id="s-losspct">—</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Market</div>
+      <div class="kv"><span class="k">Symbol</span><span class="v" id="s-symbol">XAUUSD</span></div>
+      <div class="kv"><span class="k">Spread</span><span class="v" id="s-spread">—</span></div>
+      <div class="kv"><span class="k">H1 Bias</span><span class="v" id="s-bias">—</span></div>
+      <div class="kv"><span class="k">Next Event</span><span class="v" id="s-nextevent" style="font-size:10px;max-width:100px;text-align:right;word-break:break-word">—</span></div>
+    </div>
+    <div class="panel" style="flex:1;overflow-y:auto">
+      <div class="panel-title">IGOF Pipeline</div>
+      <div id="pipeline-list"></div>
+    </div>
+  </div>
+
+  <div id="centre">
+  <div class="panel">
+    <div class="panel-title">Price</div>
+    <div style="font-size:11px;color:var(--dim);letter-spacing:.12em">XAUUSD · M5</div>
+    <div id="price-val" style="color:var(--text)">—</div>
+    <div id="price-chg"></div>
+    <div id="bid-ask"><span>BID <strong id="bid-val" style="color:var(--red)">—</strong></span><span>ASK <strong id="ask-val" style="color:var(--green)">—</strong></span></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Chart</div>
+    <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;margin-bottom:4px">PRICE HISTORY · LAST 50 BARS</div>
+    <svg class="sparkline" viewBox="0 0 600 60" preserveAspectRatio="none">
+      <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#40c4ff" stop-opacity=".4"/><stop offset="100%" stop-color="#40c4ff" stop-opacity="0"/></linearGradient></defs>
+      <path id="spark-area" class="spark-area" fill="url(#grad)"/>
+      <path id="spark-path" class="spark-line" stroke="#40c4ff"/>
+    </svg>
+  </div>
+  <div class="panel" style="flex:1;overflow-y:auto">
+    <div class="panel-title">Signal Feed</div>
+    <div id="signal-feed"></div>
+  </div>
+</div>
+
+  <div id="right">
+    <div class="panel" style="flex-shrink:0">
+      <div class="panel-title">News Calendar · Today</div>
+      <div id="news-list"></div>
+    </div>
+    <div class="panel" style="flex:1;overflow-y:auto">
+      <div class="panel-title">Layer Reasons</div>
+      <div id="reasons-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="footer">
+  <span id="conn-dot2" style="width:5px;height:5px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:4px"></span><span>Data: <span id="last-update">—</span></span>
+  <span style="display:flex;align-items:center;gap:6px;font-size:10px">
+    API: <input id="api-url-input" type="text" value="" onchange="setApiUrl(this.value)" title="Engine API URL — edit if on a different port. Saved automatically."/>
+    <span id="api-err" style="color:var(--red);display:none">✕ unreachable</span>
+  </span>
+  <span>HedgeEA SMC v6.2 · <span id="refresh-rate">3s</span></span>
+</div>
+<div id="panel-toggle-bar" style="border-top:1px solid var(--border);display:flex;justify-content:center;gap:8px;padding:8px 0;background:var(--bg1);flex-wrap:wrap">
+  <!-- Panel toggle buttons will be dynamically generated -->
+</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+//  ROOT CAUSE OF THE "DIFFERENT STATE EACH RELOAD" BUG:
+//  The old index.html initialised state as empty JS objects on every
+//  page load and only populated them once the first fetch returned.
+//  If the first fetch was slow / returned partial data the render
+//  fired with zeros / dashes.  On next load it was different because
+//  the fetch timing was different.
+//
+//  FIX: Persist all meaningful state in localStorage under versioned
+//  keys.  On boot we restore from storage BEFORE the first render so
+//  the dashboard is immediately populated with the last-known values.
+//  The merge() function only OVERWRITES a field when the API actually
+//  returns a non-null value for it, so partial responses can never
+//  wipe good existing data.
+// ─────────────────────────────────────────────────────────────────
+
+const SK_URL     = 'hedgeea_api_url_v1';
+const SK_STATE   = 'hedgeea_state_v2';
+const SK_SIGNALS = 'hedgeea_sigs_v1';
+const REFRESH    = 3000;
+
+// ── API URL (persistent) ─────────────────────────────────────────
+let ENGINE_API = localStorage.getItem(SK_URL) || 'http://localhost:3001';
+const DATA_API = 'http://localhost:8000';
+document.getElementById('api-url-input').value = ENGINE_API;
+
+function setApiUrl(v) {
+  ENGINE_API = v.trim().replace(/\/$/, '');
+  localStorage.setItem(SK_URL, ENGINE_API);
+}
+
+// ── State (persistent) ───────────────────────────────────────────
+const DEFAULT_STATE = {
+  price:0, prevPrice:0, bid:0, ask:0,
+  balance:0, equity:0, dailyPnl:0, lossPct:0,
+  spread:0, bias:'NEUTRAL', regime:'STABLE',
+  masterOn:true, nextEvent:'', connected:false,
+  pipeline:[], newsEvents:[], priceHistory:[],
+};
+
+let state = { ...DEFAULT_STATE };
+try {
+  const s = JSON.parse(localStorage.getItem(SK_STATE) || 'null');
+  if (s) Object.assign(state, s);
+} catch {}
+state.connected = false; // always start disconnected until first successful fetch
+
+let signalLog = [];
+try { signalLog = JSON.parse(localStorage.getItem(SK_SIGNALS) || '[]'); } catch {}
+
+function saveState() {
+  try {
+    const s = { ...state }; delete s.connected; delete s.prevPrice;
+    localStorage.setItem(SK_STATE, JSON.stringify(s));
+    localStorage.setItem(SK_SIGNALS, JSON.stringify(signalLog.slice(0,30)));
+  } catch {}
+}
+
+// ── Fetch helper ─────────────────────────────────────────────────
+async function fetchJSON(url, ms=2000) {
+  const ac = new AbortController();
+  const t  = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url,{signal:ac.signal}); clearTimeout(t); return r.ok ? r.json() : null; }
+  catch { clearTimeout(t); return null; }
+}
+
+// ── Poll ─────────────────────────────────────────────────────────
+async function poll() {
+  const errEl = document.getElementById('api-err');
+  let ok = false;
+  try {
+    const data = await fetchJSON(`${ENGINE_API}/dashboard-state`, 1500);
+    if (data) { merge(data); ok = true; }
+    else {
+      const tick = await fetchJSON(`${DATA_API}/latest-tick`, 800);
+      if (tick) {
+        // Merge only tick fields — never reset non-tick state
+        if (tick.price != null || tick.ask != null) {
+          state.prevPrice = state.price;
+          state.price  = tick.price || tick.ask;
+        }
+        if (tick.bid    != null) state.bid    = tick.bid;
+        if (tick.ask    != null) state.ask    = tick.ask;
+        if (tick.spread != null) state.spread = tick.spread;
+        appendPriceHistory(state.price);
+        ok = true;
+      }
+    }
+  } catch {}
+  state.connected = ok;
+  errEl.style.display = ok ? 'none' : 'inline';
+  if (ok) saveState();
+  render();
+}
+
+// ── Merge — NEVER wipe a field with null/undefined ───────────────
+function merge(data) {
+  const acc = data.account || {};
+  const mkt = data.market  || {};
+
+  if (acc.balance        != null) state.balance   = acc.balance;
+  if (acc.equity         != null) state.equity    = acc.equity;
+  if (acc.daily_pnl      != null) state.dailyPnl  = acc.daily_pnl;
+  if (acc.daily_loss_pct != null) state.lossPct   = acc.daily_loss_pct;
+
+  state.prevPrice = state.price;
+  if (mkt.price  != null) state.price  = mkt.price;
+  if (mkt.bid    != null) state.bid    = mkt.bid;
+  if (mkt.ask    != null) state.ask    = mkt.ask;
+  if (mkt.spread != null) state.spread = mkt.spread;
+  if (mkt.htf_bias || mkt.h1_bias)    state.bias      = (mkt.htf_bias || mkt.h1_bias).toUpperCase();
+  if (mkt.regime)                      state.regime    = mkt.regime.toUpperCase();
+  if (mkt.master_switch != null)       state.masterOn  = mkt.master_switch !== false;
+  if (mkt.next_event)                  state.nextEvent = mkt.next_event;
+
+  if (data.pipeline    && data.pipeline.length)    state.pipeline   = data.pipeline;
+  if (data.news_events && data.news_events.length) state.newsEvents = data.news_events;
+
+  appendPriceHistory(state.price);
+
+  (data.signals || []).forEach(s => {
+    if (!signalLog.find(x => x.time===s.time && x.action===s.action)) signalLog.unshift(s);
+  });
+  if (signalLog.length > 30) signalLog = signalLog.slice(0,30);
+}
+
+function appendPriceHistory(p) {
+  if (!p) return;
+  state.priceHistory.push(p);
+  if (state.priceHistory.length > 50) state.priceHistory.shift();
+}
+
+// ── Render ───────────────────────────────────────────────────────
+const fmt = (n, dp=2) => (n==null||isNaN(n)) ? '—' : Number(n).toFixed(dp);
+const fmtM = n => (n!=null && n!==0) ? `$${fmt(n)}` : '—';
+
+function render() {
+  const cd = document.getElementById('conn-dot');
+  const cl = document.getElementById('conn-label');
+  const cd2= document.getElementById('conn-dot2');
+  if (state.connected) {
+    cd.classList.add('online'); cd2.style.background='var(--green)';
+    cl.textContent='LIVE'; cl.style.color='var(--green)';
+  } else {
+    cd.classList.remove('online'); cd2.style.background='var(--red)';
+    cl.textContent='OFFLINE'; cl.style.color='var(--red)';
+  }
+
+  const mb = document.getElementById('master-badge');
+  mb.textContent = state.masterOn ? 'MASTER ON' : 'STANDBY';
+  mb.className   = 'pill '+(state.masterOn?'pill-green':'pill-yellow');
+
+  const rc = {STABLE:'pill-green',VOLATILE:'pill-red',RANGING:'pill-yellow'}[state.regime]||'pill-dim';
+  document.getElementById('regime-badge').innerHTML = `<span class="pill ${rc}">${state.regime}</span>`;
+
+  document.getElementById('s-balance').textContent = fmtM(state.balance);
+  document.getElementById('s-equity').textContent  = fmtM(state.equity);
+  const pnl = document.getElementById('s-pnl');
+  pnl.textContent = (state.dailyPnl>=0?'+':'')+fmtM(state.dailyPnl);
+  pnl.style.color = state.dailyPnl>=0?'var(--green)':'var(--red)';
+  document.getElementById('s-losspct').textContent = fmt(state.lossPct)+'%';
+  document.getElementById('s-spread').textContent  = state.spread ? state.spread+' pts' : '—';
+  const b = document.getElementById('s-bias');
+  b.textContent=state.bias; b.style.color=state.bias==='BULLISH'?'var(--green)':state.bias==='BEARISH'?'var(--red)':'var(--dim)';
+  document.getElementById('s-nextevent').textContent = state.nextEvent||'—';
+
+  const pv=document.getElementById('price-val'), pc=document.getElementById('price-chg');
+  const dP=state.price-state.prevPrice;
+  pv.textContent=state.price?fmt(state.price,2):'—';
+  if(dP>0){pv.style.color='var(--green)';pv.classList.remove('flash-r');void pv.offsetWidth;pv.classList.add('flash-g');}
+  else if(dP<0){pv.style.color='var(--red)';pv.classList.remove('flash-g');void pv.offsetWidth;pv.classList.add('flash-r');}
+  else pv.style.color='var(--text)';
+  pc.textContent=dP?(dP>0?'▲ ':'▼ ')+fmt(Math.abs(dP)):'';
+  pc.style.color=dP>=0?'var(--green)':'var(--red)';
+  document.getElementById('bid-val').textContent=fmt(state.bid,2);
+  document.getElementById('ask-val').textContent=fmt(state.ask,2);
+
+  renderSparkline(); renderPipeline(); renderSignals(); renderNews();
+  document.getElementById('last-update').textContent=new Date().toTimeString().slice(0,8);
+}
+
+function renderSparkline(){
+  const pts=state.priceHistory; if(pts.length<2)return;
+  const W=600,H=60,pad=2,mn=Math.min(...pts)-pad,mx=Math.max(...pts)+pad,rng=mx-mn||1;
+  const toX=i=>(i/(pts.length-1))*W, toY=v=>H-((v-mn)/rng)*H;
+  const coords=pts.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+  const lp='M '+coords.split(' ').join(' L');
+  document.getElementById('spark-path').setAttribute('d',lp);
+  document.getElementById('spark-area').setAttribute('d',lp+` L ${W},${H} L 0,${H} Z`);
+}
+
+function renderPipeline(){
+  const el=document.getElementById('pipeline-list'),re=document.getElementById('reasons-list');
+  el.innerHTML='';re.innerHTML='';
+  state.pipeline.forEach(layer=>{
+    const row=document.createElement('div'); row.className='layer-row';
+    const isN=layer.name&&layer.name.includes('News');
+    row.innerHTML=`<div class="dot ${!layer.status?'dot-off':isN?'dot-news':'dot-on'}"></div><div class="layer-name">${layer.name||'?'}</div><div class="layer-score">${layer.score!=null?layer.score.toFixed(2):'—'}</div>`;
+    el.appendChild(row);
+    if(layer.reason){
+      const r=document.createElement('div');
+      r.style.cssText='padding:3px 0;border-bottom:1px solid var(--border);font-size:10px;color:var(--dim);line-height:1.4';
+      let rsn=layer.reason;
+      ['KillzoneFilter: ','Structure: ','SMC LiquiditySweep: ','Displacement: ','FVG: ','MicroMSS: ','NewsEventLayer: '].forEach(p=>rsn=rsn.replace(p,''));
+      r.innerHTML=`<span style="color:var(--dim);font-size:9px">${layer.name||''}:</span> ${rsn}`;
+      re.appendChild(r);
+    }
+  });
+}
+
+function renderSignals(){
+  const el=document.getElementById('signal-feed'); el.innerHTML='';
+  signalLog.slice(0,12).forEach(sig=>{
+    const row=document.createElement('div'); row.className='sig-row';
+    const act=(sig.action||sig.direction||'WAIT').toUpperCase(), type=sig.type||'SMC';
+    let tc='pill-dim',ac='var(--dim)';
+    if(type==='NEWS_SCALP'){tc='pill-orange';ac='var(--orange)';}
+    else if(sig.event==='DIRECTION_VETO'){tc='pill-yellow';ac='var(--yellow)';}
+    else if(act.includes('BUY')||act.includes('LONG')){tc='pill-green';ac='var(--green)';}
+    else if(act.includes('SELL')||act.includes('SHORT')){tc='pill-red';ac='var(--red)';}
+    const price=sig.price?fmt(sig.price):'', trig=sig.trigger?sig.trigger.slice(0,24):(price?`@ ${price}`:'');
+    row.innerHTML=`<span class="sig-time">${sig.time||''}</span><span class="sig-type"><span class="pill ${tc}" style="font-size:9px">${type.replace('_SCALP','')}</span></span><span style="font-size:12px;font-weight:500;color:${ac};width:48px">${act}</span><span class="sig-detail">${trig}</span>`;
+    el.appendChild(row);
+  });
+}
+
+function renderNews(){
+  const el=document.getElementById('news-list'); el.innerHTML='';
+  if(!state.newsEvents.length){el.innerHTML='<div style="padding:6px 0;color:var(--dim);font-size:11px">No USD events loaded</div>';return;}
+  state.newsEvents.slice(0,8).forEach(e=>{
+    const row=document.createElement('div'); row.className='news-row';
+    const imp=e.impact||0;
+    const dots=imp>=3?`<span style="color:var(--red)">●●●</span>`:imp>=2?`<span style="color:var(--yellow)">●●○</span>`:`<span style="color:var(--dim)">●○○</span>`;
+    const t=(e.time_utc||'').slice(11,16);
+    const act=e.actual!=null?parseFloat(e.actual).toFixed(1):null;
+    const frc=e.forecast!=null?parseFloat(e.forecast).toFixed(1):null;
+    const av=act?`${act}${frc?'/'+frc:''}`:(frc?`~${frc}`:'—');
+    let imm=false;
+    try{const et=new Date(e.time_utc),df=(et-new Date())/60000;imm=df>=0&&df<=5;}catch{}
+    row.innerHTML=`<span class="news-time" style="color:${imm?'var(--yellow)':'var(--dim)'}">${t}</span><span class="news-imp">${dots}</span><span class="news-title" style="color:${imm?'var(--yellow)':'var(--text)'}">${(e.title||'').slice(0,26)}</span><span class="news-actual">${av}</span>`;
+    if(imm)row.style.background='rgba(255,215,64,.04)';
+    el.appendChild(row);
+  });
+}
+
+async function toggleMaster(){
+  const btn=document.getElementById('kill-btn');
+  try{
+    await fetch(`${ENGINE_API}/master-switch`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({master_switch:!state.masterOn})});
+    btn.textContent=state.masterOn?'ACTIVATING...':'KILLING...';
+    btn.style.color=state.masterOn?'var(--green)':'var(--red)';
+    setTimeout(()=>{btn.textContent='KILL';btn.style.color='var(--red)';},2000);
+  }catch{btn.textContent='ERR';setTimeout(()=>{btn.textContent='KILL';},1500);}
+}
+
+// Boot sequence
+function startBootSequence() {
+  const bootScreen = document.getElementById('boot-screen');
+  const bootStatus = document.querySelector('.boot-status');
+  const bootDetails = document.querySelector('.boot-details');
+  const progressBar = document.querySelector('.progress');
+  
+  const bootSteps = [
+    { text: 'Initializing system...', detail: 'Loading core modules...', delay: 500 },
+    { text: 'Checking MT5 connection...', detail: 'Verifying broker credentials...', delay: 800 },
+    { text: 'Starting data feed...', detail: 'Connecting to price providers...', delay: 600 },
+    { text: 'Loading trading strategies...', detail: 'Initializing SMC layers...', delay: 700 },
+    { text: 'Activating risk management...', detail: 'Setting up position limits...', delay: 500 },
+    { text: 'Starting execution engine...', detail: 'Preparing order routing...', delay: 600 },
+    { text: 'Loading dashboard components...', detail: 'Initializing UI modules...', delay: 400 },
+    { text: 'System ready!', detail: 'All systems operational', delay: 300 }
+  ];
+  
+  let stepIndex = 0;
+  
+  function executeStep() {
+    if (stepIndex < bootSteps.length) {
+      const step = bootSteps[stepIndex];
+      bootStatus.textContent = step.text;
+      bootDetails.textContent = step.detail;
+      
+      // Animate progress bar
+      const progressPercent = ((stepIndex + 1) / bootSteps.length) * 100;
+      progressBar.style.width = progressPercent + '%';
+      
+      stepIndex++;
+      setTimeout(executeStep, step.delay);
+    } else {
+      // Boot complete, hide boot screen and show app
+      setTimeout(() => {
+        bootScreen.style.opacity = '0';
+        setTimeout(() => {
+          bootScreen.style.display = 'none';
+          document.getElementById('app').style.display = 'grid';
+        }, 500);
+      }, 500);
+    }
+  }
+  
+  // Start boot sequence after a brief moment
+  setTimeout(executeStep, 300);
+}
+
+// Draggable panels functionality
+function makePanelsDraggable() {
+  const panels = document.querySelectorAll('#sidebar .panel, #centre .panel, #right .panel');
+  let draggedPanel = null;
+  let offsetX = 0, offsetY = 0;
+  let originalIndex = 0;
+  
+  panels.forEach(panel => {
+    const handle = panel.querySelector('.panel-title');
+    
+    handle.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('collapse-btn')) return;
+      
+      draggedPanel = panel;
+      originalIndex = Array.from(panel.parentNode.children).indexOf(panel);
+      
+      // Get position relative to panel
+      const rect = panel.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      
+      panel.classList.add('dragging');
+      panel.style.position = 'absolute';
+      panel.style.zIndex = '1000';
+      panel.style.width = rect.width + 'px';
+      
+      // Create placeholder
+      const placeholder = document.createElement('div');
+      placeholder.style.height = rect.height + 'px';
+      placeholder.style.width = rect.width + 'px';
+      panel.parentNode.insertBefore(placeholder, panel.nextSibling);
+    });
+    
+    // Collapse button
+    const collapseBtn = document.createElement('div');
+    collapseBtn.className = 'collapse-btn';
+    collapseBtn.innerHTML = '−';
+    collapseBtn.title = 'Collapse/Expand';
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('collapsed');
+      collapseBtn.innerHTML = panel.classList.contains('collapsed') ? '+' : '−';
+      updatePanelToggleBar();
+    });
+    handle.appendChild(collapseBtn);
+  });
+  
+  // Mouse move and up events
+  document.addEventListener('mousemove', (e) => {
+    if (!draggedPanel) return;
+    
+    const x = e.clientX - offsetX;
+    const y = e.clientY - offsetY;
+    
+    draggedPanel.style.left = x + 'px';
+    draggedPanel.style.top = y + 'px';
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (draggedPanel) {
+      const placeholder = draggedPanel.previousElementSibling;
+      if (placeholder && placeholder.nodeType === 1 && placeholder.style.height) {
+        draggedPanel.parentNode.insertBefore(draggedPanel, placeholder);
+        placeholder.remove();
+      }
+      
+      draggedPanel.classList.remove('dragging');
+      draggedPanel.style.position = '';
+      draggedPanel.style.zIndex = '';
+      draggedPanel.style.left = '';
+      draggedPanel.style.top = '';
+      draggedPanel.style.width = '';
+      draggedPanel = null;
+    }
+  });
+}
+
+// Draggable panels functionality
+function makePanelsDraggable() {
+  const panels = document.querySelectorAll('#sidebar .panel, #centre .panel, #right .panel');
+  let draggedPanel = null;
+  let offsetX = 0, offsetY = 0;
+  let originalIndex = 0;
+  
+  panels.forEach(panel => {
+    const handle = panel.querySelector('.panel-title');
+    
+    handle.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('collapse-btn')) return;
+      
+      draggedPanel = panel;
+      originalIndex = Array.from(panel.parentNode.children).indexOf(panel);
+      
+      // Get position relative to panel
+      const rect = panel.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      
+      panel.classList.add('dragging');
+      panel.style.position = 'absolute';
+      panel.style.zIndex = '1000';
+      panel.style.width = rect.width + 'px';
+      
+      // Create placeholder
+      const placeholder = document.createElement('div');
+      placeholder.style.height = rect.height + 'px';
+      placeholder.style.width = rect.width + 'px';
+      panel.parentNode.insertBefore(placeholder, panel.nextSibling);
+    });
+    
+    // Collapse button
+    const collapseBtn = document.createElement('div');
+    collapseBtn.className = 'collapse-btn';
+    collapseBtn.innerHTML = '−';
+    collapseBtn.title = 'Collapse/Expand';
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('collapsed');
+      collapseBtn.innerHTML = panel.classList.contains('collapsed') ? '+' : '−';
+      updatePanelToggleBar();
+    });
+    handle.appendChild(collapseBtn);
+  });
+  
+  // Mouse move and up events
+  document.addEventListener('mousemove', (e) => {
+    if (!draggedPanel) return;
+    
+    const x = e.clientX - offsetX;
+    const y = e.clientY - offsetY;
+    
+    draggedPanel.style.left = x + 'px';
+    draggedPanel.style.top = y + 'px';
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (draggedPanel) {
+      const placeholder = draggedPanel.previousElementSibling;
+      if (placeholder && placeholder.nodeType === 1 && placeholder.style.height) {
+        draggedPanel.parentNode.insertBefore(draggedPanel, placeholder);
+        placeholder.remove();
+      }
+      
+      draggedPanel.classList.remove('dragging');
+      draggedPanel.style.position = '';
+      draggedPanel.style.zIndex = '';
+      draggedPanel.style.left = '';
+      draggedPanel.style.top = '';
+      draggedPanel.style.width = '';
+      draggedPanel = null;
+    }
+  });
+}
+
+// Engine control functions
+let engineStarted = false;
+let engineStartTime = 0;
+let uptimeInterval = null;
+
+function startEngine() {
+  if (!engineStarted) {
+    engineStarted = true;
+    engineStartTime = Date.now();
+    startUptimeCounter();
+    updateEngineUI();
+    // Simulate API call to start engine
+    console.log('Engine started');
+  }
+}
+
+function stopEngine() {
+  if (engineStarted) {
+    engineStarted = false;
+    stopUptimeCounter();
+    updateEngineUI();
+    // Simulate API call to stop engine
+    console.log('Engine stopped');
+  }
+}
+
+function restartEngine() {
+  stopEngine();
+  setTimeout(startEngine, 1000);
+}
+
+function startUptimeCounter() {
+  stopUptimeCounter(); // Clear any existing interval
+  uptimeInterval = setInterval(updateUptimeDisplay, 1000);
+  updateUptimeDisplay(); // Update immediately
+}
+
+function stopUptimeCounter() {
+  if (uptimeInterval) {
+    clearInterval(uptimeInterval);
+    uptimeInterval = null;
+  }
+}
+
+function updateUptimeDisplay() {
+  if (engineStarted) {
+    const elapsed = Date.now() - engineStartTime;
+    const hours = Math.floor(elapsed / (1000 * 60 * 60));
+    const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((elapsed % (1000 * 60)) / 1000);
+    
+    const formatted = 
+      String(hours).padStart(2, '0') + ':' +
+      String(minutes).padStart(2, '0') + ':' +
+      String(seconds).padStart(2, '0');
+    
+    document.getElementById('uptime-counter').textContent = 'Uptime: ' + formatted;
+  }
+}
+
+function updateEngineUI() {
+  const startBtn = document.getElementById('start-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  const restartBtn = document.getElementById('restart-btn');
+  
+  if (engineStarted) {
+    startBtn.style.opacity = '0.5';
+    startBtn.style.cursor = 'not-allowed';
+    stopBtn.style.opacity = '1';
+    stopBtn.style.cursor = 'pointer';
+    restartBtn.style.opacity = '1';
+    restartBtn.style.cursor = 'pointer';
+  } else {
+    startBtn.style.opacity = '1';
+    startBtn.style.cursor = 'pointer';
+    stopBtn.style.opacity = '0.5';
+    stopBtn.style.cursor = 'not-allowed';
+    restartBtn.style.opacity = '0.5';
+    restartBtn.style.cursor = 'not-allowed';
+  }
+}
+
+// Initialize app as hidden initially
+document.getElementById('app').style.display = 'none';
+
+// Boot — render persisted state immediately (zero blank-flash on reload)
+startBootSequence();
+render();
+poll();
+setInterval(poll, REFRESH);
+setInterval(()=>{
+  const e=Math.floor((Date.now()-Date.now())/1000);
+  document.getElementById('clock-el').textContent=new Date().toUTCString().slice(17,25)+' UTC';
+},1000);
+setInterval(()=>{
+  const e=Math.floor((Date.now()-(window._startTime=window._startTime||Date.now()))/1000);
+  const h=String(Math.floor(e/3600)).padStart(2,'0'),m=String(Math.floor((e%3600)/60)).padStart(2,'0'),s=String(e%60).padStart(2,'0');
+  document.getElementById('runtime-el').textContent=`${h}:${m}:${s}`;
+},1000);
+
+// Panel toggle bar functionality
+function createPanelToggleBar() {
+  const toggleBar = document.getElementById('panel-toggle-bar');
+  const panels = document.querySelectorAll('#sidebar .panel, #centre .panel, #right .panel');
+  
+  toggleBar.innerHTML = ''; // Clear existing buttons
+  
+  panels.forEach((panel, index) => {
+    const titleEl = panel.querySelector('.panel-title');
+    const panelName = titleEl ? titleEl.textContent.trim() : `Panel ${index + 1}`;
+    
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'panel-toggle-btn';
+    toggleBtn.textContent = panelName;
+    toggleBtn.title = `Toggle ${panelName}`;
+    toggleBtn.dataset.panelIndex = index;
+    
+    // Check if panel is currently visible (not collapsed and has content)
+    const isVisible = !panel.classList.contains('collapsed') && 
+                     panel.querySelector(':scope > *:not(.panel-title)') !== null;
+    toggleBtn.classList.toggle('active', isVisible);
+    
+    toggleBtn.addEventListener('click', () => {
+      // Toggle panel visibility (collapse/expand)
+      panel.classList.toggle('collapsed');
+      const collapseBtn = panel.querySelector('.collapse-btn');
+      if (collapseBtn) {
+        collapseBtn.innerHTML = panel.classList.contains('collapsed') ? '+' : '−';
+      }
+      
+      // Update toggle button active state
+      const isNowVisible = !panel.classList.contains('collapsed') && 
+                          panel.querySelector(':scope > *:not(.panel-title)') !== null;
+      toggleBtn.classList.toggle('active', isNowVisible);
+    });
+    
+    toggleBar.appendChild(toggleBtn);
+  });
+}
+
+// Update panel toggle bar when panels are collapsed/expanded
+function updatePanelToggleBar() {
+  setTimeout(createPanelToggleBar, 100);
+}
+
+// Make panels draggable after DOM is loaded
+setTimeout(makePanelsDraggable, 1000);
+setTimeout(createPanelToggleBar, 1000);
+setTimeout(createPanelToggleBar, 1000);
+
+// Update panel toggle bar when panels are collapsed/expanded
+function updatePanelToggleBar() {
+  setTimeout(createPanelToggleBar, 100);
+}
+</script>
+<!-- Settings Modal -->
+<div id="settings-modal" class="settings-modal">
+  <div class="settings-modal-content">
+    <div class="settings-modal-header">
+      <h2>⚙ Settings</h2>
+      <button id="settings-close-btn" class="settings-close-btn">&times;</button>
+    </div>
+    <div class="settings-modal-body">
+      <div class="settings-tab-container">
+        <button class="settings-tab-btn active" data-tab="trading">Trading</button>
+        <button class="settings-tab-btn" data-tab="risk">Risk Rules</button>
+        <button class="settings-tab-btn" data-tab="pipeline">Pipeline</button>
+        <button class="settings-tab-btn" data-tab="mt5">MT5 Connection</button>
+        <button class="settings-tab-btn" data-tab="dashboard">Dashboard</button>
+      </div>
+      <div class="settings-tabs-content">
+        <!-- Trading Tab -->
+        <div class="settings-tab active" id="trading-tab">
+          <h3>Trading Settings</h3>
+          <div class="settings-group">
+            <label>Symbol:</label>
+            <input type="text" id="settings-symbol" value="XAUUSD">
+          </div>
+          <div class="settings-group">
+            <label>Default Account Balance ($):</label>
+            <input type="number" id="settings-balance" value="10" step="0.01">
+          </div>
+          <div class="settings-group">
+            <label>Master Switch:</label>
+            <select id="settings-master-switch">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Risk Rules Tab -->
+        <div class="settings-tab" id="risk-tab">
+          <h3>Risk Rules Settings</h3>
+          <div class="settings-group">
+            <label>Min Equity Threshold ($):</label>
+            <input type="number" id="settings-min-equity" value="7.5" step="0.1">
+          </div>
+          <div class="settings-group">
+            <label>Max Daily Loss (%):</label>
+            <input type="number" id="settings-max-daily-loss" value="5.0" step="0.1">
+          </div>
+          <div class="settings-group">
+            <label>Max Concurrent Positions:</label>
+            <input type="number" id="settings-max-concurrent" value="1" min="1">
+          </div>
+          <div class="settings-group">
+            <label>Min Lot Size:</label>
+            <input type="number" id="settings-min-lot" value="0.01" step="0.01">
+          </div>
+          <div class="settings-group">
+            <label>Max Lot Size:</label>
+            <input type="number" id="settings-max-lot" value="0.1" step="0.01">
+          </div>
+          <div class="settings-group">
+            <label>Seed Balance ($):</label>
+            <input type="number" id="settings-seed-balance" value="10.0" step="0.1">
+          </div>
+          <div class="settings-group">
+            <label>Profit Step for Scaling ($):</label>
+            <input type="number" id="settings-profit-step" value="15.0" step="0.1">
+          </div>
+        </div>
+        
+        <!-- Pipeline Tab -->
+        <div class="settings-tab" id="pipeline-tab">
+          <h3>Pipeline Settings</h3>
+          <div class="settings-group">
+            <label>Active Data Source:</label>
+            <select id="settings-data-source">
+              <option value="MT5_PROVIDER">MT5 Provider</option>
+              <option value="SIERRA_PROVIDER">Sierra Provider</option>
+            </select>
+          </div>
+          <div class="settings-group">
+            <label>Enable News Scalp:</label>
+            <select id="settings-news-scalp">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          <div class="settings-group">
+            <label>Max Spread Points:</label>
+            <input type="number" id="settings-max-spread" value="50" min="1">
+          </div>
+        </div>
+        
+        <!-- MT5 Connection Tab -->
+        <div class="settings-tab" id="mt5-tab">
+          <h3>MT5 Connection Settings</h3>
+          <div class="settings-group">
+            <label>Login:</label>
+            <input type="text" id="settings-mt5-login" value="298686191">
+          </div>
+          <div class="settings-group">
+            <label>Password:</label>
+            <input type="password" id="settings-mt5-password" value="@Tony.123">
+          </div>
+          <div class="settings-group">
+            <label>Server:</label>
+            <input type="text" id="settings-mt5-server" value="Exness-MT5Trial9">
+          </div>
+          <div class="settings-group">
+            <label>UTC Offset:</label>
+            <input type="number" id="settings-mt5-utc-offset" value="3">
+          </div>
+        </div>
+        
+        <!-- Dashboard Tab -->
+        <div class="settings-tab" id="dashboard-tab">
+          <h3>Dashboard Settings</h3>
+          <div class="settings-group">
+            <label>Enable React Dashboard:</label>
+            <select id="settings-react-dashboard">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          <div class="settings-group">
+            <label>React Dashboard Port:</label>
+            <input type="number" id="settings-react-port" value="3000" min="1" max="65535">
+          </div>
+          <div class="settings-group">
+            <label>Loop Delay (seconds):</label>
+            <input type="number" id="settings-loop-delay" value="3.0" step="0.1">
+          </div>
+          <div class="settings-group">
+            <label>Buffer Max Length:</label>
+            <input type="number" id="settings-buffer-max" value="100" min="1">
+          </div>
+          <div class="settings-group">
+            <label>Heartbeat Interval (seconds):</label>
+            <input type="number" id="settings-heartbeat" value="15" min="1">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-modal-footer">
+      <button id="settings-save-btn" class="settings-save-btn">Save Settings</button>
+      <button id="settings-reset-btn" class="settings-reset-btn">Reset to Defaults</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
