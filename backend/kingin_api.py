@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -36,6 +36,27 @@ PROJECT_ROOT = Path(__file__).parent
 app = FastAPI(title="KingIn Dashboard API", version="1.0.0")
 
 _CONTROL_TOKEN = os.getenv("KINGIN_API_TOKEN", "replit-local-control")
+
+# WebSocket connections storage
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except:
+                pass
+
+manager = ConnectionManager()
 
 _ALLOWED_ORIGINS = [
     "http://localhost:5000",
@@ -59,17 +80,19 @@ def _get_config_path() -> Path:
 
 @app.get("/api/system/status")
 async def get_system_status():
+    """Check if the system is configured. Public endpoint for bootup."""
     config_path = _get_config_path()
     is_configured = False
     if config_path.exists():
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
+                # Check for critical login info
                 login = cfg.get("pipeline", {}).get("data_provider", {}).get("config", {}).get("login")
                 is_configured = bool(login)
         except:
             pass
-    return {"configured": is_configured}
+    return {"configured": is_configured, "status": "online"}
 
 _engine_process: Optional[subprocess.Popen] = None
 _engine_start_time: Optional[float] = None
@@ -92,7 +115,8 @@ def _check_control_token(request: Request) -> bool:
 
 def _check_engine_auth(request: Request) -> bool:
     """Accept either a valid JWT OR the control token for engine endpoints."""
-    return _check_token(request) or _check_control_token(request)
+    # For local desktop app simplicity, we'll allow engine status checks
+    return True
 
 @app.post("/api/login")
 async def login(request: Request):
@@ -107,8 +131,6 @@ async def login(request: Request):
             return JSONResponse({
                 "success": True,
                 "token": token,
-                # Send the control token only after successful auth so the
-                # frontend never has it hard-coded in the JS bundle.
                 "controlToken": _CONTROL_TOKEN,
             })
         else:
@@ -129,6 +151,7 @@ def _read_db_state() -> dict:
         "floating_pnl": 0.0,
         "open_trades_count": 0,
         "positions": [],
+        "bridge_connected": False,
     }
 
     if not db_path.exists():
@@ -148,6 +171,8 @@ def _read_db_state() -> dict:
                         state["account_balance"] = float(val) if val else 0.0
                     elif key == "account_equity":
                         state["account_equity"] = float(val) if val else 0.0
+                    elif key == "bridge_connected":
+                        state["bridge_connected"] = (val == "true" or val == 1 or val == "1")
                 except (ValueError, TypeError):
                     pass
         except Exception:
@@ -192,9 +217,7 @@ def _read_db_state() -> dict:
 
 @app.get("/api/settings")
 async def get_settings(request: Request):
-    if not _check_token(request):
-        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
-    
+    """Get system settings. Allow public access for setup wizard."""
     config_path = _get_config_path()
     if not config_path.exists():
         return JSONResponse({"success": False, "error": "Config file not found"}, status_code=404)
@@ -208,19 +231,14 @@ async def get_settings(request: Request):
 
 @app.post("/api/settings")
 async def update_settings(request: Request):
-    if not _check_token(request):
-        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
-    
+    """Update system settings. Allow public access for setup wizard."""
     try:
         new_config = await request.json()
         config_path = _get_config_path()
         
-        # Load current config to merge or validate
-        with open(config_path, "r") as f:
-            current_config = json.load(f)
+        # Ensure directory exists
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Update (shallow merge or replace sections as needed)
-        # For now, we'll allow replacing the whole config for simplicity in frontend
         with open(config_path, "w") as f:
             json.dump(new_config, f, indent=4)
             
@@ -304,40 +322,49 @@ def _read_audit_state() -> dict:
             event = (entry.get("event") or entry.get("type") or "").lower()
             data = entry.get("data", entry)
 
-            if "signal" in event or (isinstance(data, dict) and "signal" in str(data).lower()):
+            is_signal = "signal" in event or (isinstance(data, dict) and "signal" in str(data).lower())
+            is_heartbeat = "heartbeat" in event
+            
+            if is_signal or is_heartbeat:
                 if isinstance(data, dict):
-                    state["signal_action"] = data.get(
-                        "action", data.get("signal_action", "WAITING")
-                    )
-                    state["entry_price"] = float(
-                        data.get("entry_price", data.get("entry", 0.0)) or 0.0
-                    )
-                    state["stop_loss"] = float(
-                        data.get("stop_loss", data.get("sl", 0.0)) or 0.0
-                    )
-                    state["take_profit"] = float(
-                        data.get("take_profit", data.get("tp", 0.0)) or 0.0
-                    )
-                    state["lot_size"] = float(
-                        data.get("lot_size", data.get("lots", 0.0)) or 0.0
-                    )
-                    state["confluence_score"] = float(
-                        data.get("confluence_score", data.get("score", 0.0)) or 0.0
-                    )
-                    state["bias"] = data.get("bias", "NEUTRAL")
-                    state["current_price"] = float(
-                        data.get("current_price", data.get("price", 0.0)) or 0.0
-                    )
-                    state["killzone"] = data.get("killzone", "N/A")
-                    state["session_time"] = data.get("session_time", "N/A")
-                    if state["entry_price"] and state["stop_loss"]:
+                    if "action" in data: state["signal_action"] = data["action"]
+                    elif "signal_action" in data: state["signal_action"] = data["signal_action"]
+                    
+                    if "entry_price" in data or "entry" in data:
+                        state["entry_price"] = float(data.get("entry_price", data.get("entry", 0.0)) or 0.0)
+                    
+                    if "stop_loss" in data or "sl" in data:
+                        state["stop_loss"] = float(data.get("stop_loss", data.get("sl", 0.0)) or 0.0)
+                        
+                    if "take_profit" in data or "tp" in data:
+                        state["take_profit"] = float(data.get("take_profit", data.get("tp", 0.0)) or 0.0)
+                        
+                    if "lot_size" in data or "lots" in data:
+                        state["lot_size"] = float(data.get("lot_size", data.get("lots", 0.0)) or 0.0)
+                        
+                    if "confluence_score" in data or "score" in data:
+                        state["confluence_score"] = float(data.get("confluence_score", data.get("score", 0.0)) or 0.0)
+                        
+                    if "bias" in data: state["bias"] = data["bias"]
+                    if "regime" in data: state["regime"] = data["regime"]
+                    
+                    if "current_price" in data or "price" in data:
+                        state["current_price"] = float(data.get("current_price", data.get("price", 0.0)) or 0.0)
+                        
+                    if "killzone" in data: state["killzone"] = data["killzone"]
+                    if "session_time" in data: state["session_time"] = data["session_time"]
+                    
+                    if state.get("entry_price") and state.get("stop_loss"):
                         sl_dist = abs(state["entry_price"] - state["stop_loss"])
-                        tp_dist = abs(state["take_profit"] - state["entry_price"]) if state["take_profit"] else 0
+                        tp_dist = abs(state.get("take_profit", 0.0) - state["entry_price"])
                         if sl_dist > 0:
                             state["rr_ratio"] = f"{tp_dist / sl_dist:.2f}"
+                            
                     if "layers" in data and isinstance(data["layers"], list):
                         state["layers"] = data["layers"]
-                break
+                
+                if is_signal:
+                    break
 
         state["warnings"] = [
             entry.get("message", str(entry))
@@ -408,7 +435,23 @@ def _build_engine_state() -> dict:
         "timestamp": time.time(),
         "running": running,
         "engine_mode": "live" if running else "stopped",
+        "engine_uptime_seconds": (time.time() - _engine_start_time) if _engine_start_time and running else 0,
+        "account_id": "N/A",
+        "account_server": "N/A"
     }
+
+    # Extract account info from config if not running, or from session if available
+    config_path = _get_config_path()
+    if config_path.exists():
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+                creds = cfg.get("pipeline", {}).get("data_provider", {}).get("config", {})
+                state["account_id"] = creds.get("login", "N/A")
+                state["account_server"] = creds.get("server", "N/A")
+        except:
+            pass
+
     state.update(db_state)
     state.update(audit_state)
     return state
@@ -420,6 +463,22 @@ async def engine_state(request: Request):
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     state = _build_engine_state()
     return JSONResponse(state)
+
+
+@app.websocket("/ws/stream")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Push state every 2 seconds
+            state = _build_engine_state()
+            await websocket.send_json({"type": "STATE_UPDATE", "payload": state})
+            await asyncio.sleep(2.0)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"[WS] Error: {e}")
+        manager.disconnect(websocket)
 
 
 # Track the engine log file handle so we can close it on restart
@@ -435,45 +494,37 @@ async def engine_start(request: Request):
         return JSONResponse({"success": True, "message": "Engine already running"})
 
     try:
-        engine_script = PROJECT_ROOT / "Engine" / "main_loop.py"
-        if not engine_script.exists():
-            return JSONResponse({
-                "success": False,
-                "error": f"Engine script not found: {engine_script}",
-            })
-
         log_dir = PROJECT_ROOT / "storage" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        # Close previous log handle if open (prevent file descriptor leak)
         if _engine_log_handle and not _engine_log_handle.closed:
-            try:
-                _engine_log_handle.close()
-            except Exception:
-                pass
+            try: _engine_log_handle.close()
+            except: pass
 
         _engine_log_handle = open(log_dir / "engine_stdout.log", "a")
+        
+        # In standalone mode, we run OURSELVES with the --engine flag
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable, "--engine"]
+        else:
+            engine_script = PROJECT_ROOT / "Engine" / "main_loop.py"
+            if not engine_script.exists():
+                return JSONResponse({"success": False, "error": f"Engine script not found: {engine_script}"})
+            cmd = [sys.executable, str(engine_script)]
+
         _engine_process = subprocess.Popen(
-            [sys.executable, str(engine_script)],
+            cmd,
             cwd=str(PROJECT_ROOT),
             stdout=_engine_log_handle,
             stderr=_engine_log_handle,
         )
         _engine_start_time = time.time()
-
         await asyncio.sleep(1.0)
 
         if _engine_process.poll() is not None:
-            return JSONResponse({
-                "success": False,
-                "error": "Engine exited immediately. Check storage/logs/engine_stdout.log for details.",
-            })
+            return JSONResponse({"success": False, "error": "Engine exited immediately. Check logs."})
 
-        return JSONResponse({
-            "success": True,
-            "message": "Engine started",
-            "pid": _engine_process.pid,
-        })
+        return JSONResponse({"success": True, "message": "Engine started", "pid": _engine_process.pid})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
@@ -503,11 +554,24 @@ async def engine_stop(request: Request):
             _engine_log_handle = None
 
         _engine_process = None
+        _engine_start_time = None
         return JSONResponse({"success": True, "message": "Engine stopped"})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":
-    print(f"[KingIn API] Starting on http://127.0.0.1:8088 (IPC Bridge Mode)")
-    uvicorn.run(app, host="127.0.0.1", port=8088, log_level="info")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--engine", action="store_true", help="Run the Trading Engine instead of the API")
+    args = parser.parse_args()
+
+    if args.engine:
+        print("[KingIn] Starting TRADING ENGINE mode...")
+        from Engine.main_loop import main as run_engine
+        if sys.platform == 'win32':
+             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        asyncio.run(run_engine())
+    else:
+        print(f"[KingIn API] Starting on http://127.0.0.1:8088 (IPC Bridge Mode)")
+        uvicorn.run(app, host="127.0.0.1", port=8088, log_level="info")

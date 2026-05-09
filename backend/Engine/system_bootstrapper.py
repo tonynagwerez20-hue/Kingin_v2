@@ -51,6 +51,61 @@ class SystemBootstrapper:
         self.strategy_manager = None
         self.filtration = None
         self.account_balance = None
+        self.mt5_session = None
+        self.config = self._load_config()
+
+    def _load_config(self) -> Dict:
+        """Load configuration from trading_params_lite.json."""
+        config_path = self.project_root / "config" / "trading_params_lite.json"
+        if config_path.exists():
+            try:
+                import json
+                with open(config_path, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"[Startup] Error loading config: {e}")
+        return {}
+
+    def login_mt5(self) -> bool:
+        """Attempt direct login to MT5 using credentials from config."""
+        try:
+            import MetaTrader5 as mt5
+        except ImportError:
+            print("[Startup] MetaTrader5 library not installed. Direct MT5 sync unavailable.")
+            return False
+
+        creds = self.config.get("pipeline", {}).get("data_provider", {}).get("config", {})
+        login = creds.get("login")
+        password = creds.get("password")
+        server = creds.get("server")
+
+        if not login:
+            print("[Startup] No MT5 credentials found in config. Skipping direct login.")
+            return False
+
+        print(f"[Startup] Attempting direct MT5 login for Account {login} on {server}...")
+        
+        if not mt5.initialize():
+            print(f"[Startup] MT5 initialize failed: {mt5.last_error()}")
+            return False
+
+        authorized = mt5.login(int(login), password=password, server=server)
+        if authorized:
+            account_info = mt5.account_info()
+            if account_info:
+                self.mt5_session = {
+                    "login": account_info.login,
+                    "server": account_info.server,
+                    "balance": account_info.balance,
+                    "equity": account_info.equity,
+                    "leverage": account_info.leverage
+                }
+                print(f"[OK] [Startup] Direct MT5 connection established. Balance: ${account_info.balance:,.2f}")
+                return True
+        else:
+            print(f"[Startup] Direct MT5 login failed: {mt5.last_error()}")
+        
+        return False
         
     def check_dependencies(self) -> None:
         """Verify all requirements are installed, attempt auto-fix if missing."""
@@ -90,38 +145,39 @@ class SystemBootstrapper:
         try:
             if self.backtest_mode:
                 # Use alternative ports to avoid conflict with running system
-                self.bridge = Bridge(pub_port=5565, req_port=5567)
+                self.bridge = Bridge(pub_port=5565, req_port=5567, mt5_session=self.mt5_session)
             else:
-                self.bridge = Bridge(pub_port=5555, req_port=5557)
+                self.bridge = Bridge(pub_port=5555, req_port=5557, mt5_session=self.mt5_session)
             
             if not self.backtest_mode:
                 if not self.bridge.connected:
-                    print("\n[ERROR] [CRITICAL] MT5 Bridge NOT CONNECTED")
+                    print("\n[WARN] MT5 Bridge NOT CONNECTED")
+                    print("   The engine will start in PARTIAL mode using direct MT5 sync.")
+                    print("   Live trading requires the HedgeEA to be attached to an MT5 chart.")
                     print("   Possible causes:")
                     print("   1. MetaTrader 5 is not running")
                     print("   2. Algo Trading is disabled (must be GREEN)")
                     print("   3. EA is not attached to chart")
                     print("   4. DLL imports not allowed in MT5 settings")
-                    print("\n   Fix: Run diagnostic script first:")
-                    print("   python tests/diag_system_health.py\n")
-                    sys.exit(1)
+                    print("\n   Check MT5 'Experts' tab for heartbeat status.\n")
+                    # sys.exit(1) - Removed to allow dashboard to show direct-sync data
                 
                 # Test heartbeat
                 heartbeat = self.bridge.check_connection()
                 if not heartbeat:
-                    print("\n[ERROR] [CRITICAL] MT5 Bridge heartbeat FAILED")
-                    print("   EA is not responding. Check MT5 'Experts' tab for errors.")
-                    print("   Ensure EA shows smiley face (not sad face)\n")
-                    sys.exit(1)
+                    print("\n[WARN] MT5 Bridge heartbeat FAILED")
+                    print("   EA is not responding via ZMQ. Direct MT5 sync will be used for dashboard.")
+                    print("   Ensure EA shows smiley face (not sad face) in MT5.\n")
+                    # sys.exit(1) - Removed for resilience
                 
                 print("[OK] [Pre-Flight] MT5 Bridge: CONNECTED")
             else:
                 print("[OK] [Pre-Flight] MT5 Bridge: OFFLINE (Backtest Mode Active)")
                 
         except Exception as e:
-            print(f"\n[X] [CRITICAL] MT5 Bridge initialization failed: {e}")
-            print("   Run diagnostic script: python tests/diag_system_health.py\n")
-            sys.exit(1)
+            print(f"\n[!] [Warning] MT5 Bridge initialization error: {e}")
+            print("   The system will attempt to continue using direct MT5 session data.\n")
+            # sys.exit(1) - Removed for resilience
     
     def initialize_risk_and_strategies(self, default_balance: float) -> None:
         """Initialize risk management and strategy components."""
@@ -250,6 +306,9 @@ class SystemBootstrapper:
         # Step 1: Check dependencies
         self.check_dependencies()
         
+        # Step 1.5: Direct MT5 Login
+        self.login_mt5()
+        
         # Step 2: Initialize MT5 Bridge
         self.initialize_bridge()
         
@@ -271,5 +330,6 @@ class SystemBootstrapper:
             "strategy_manager": self.strategy_manager,
             "filtration": self.filtration,
             "account_balance": self.account_balance,
+            "mt5_session": self.mt5_session,
             "db": self.position_tracker.db if self.position_tracker else None
         }

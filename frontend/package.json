@@ -14,8 +14,11 @@
     "test": "cd ../backend && pytest Engine/tests"
   },
   "dependencies": {
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.14.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "recharts": "^2.12.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
@@ -29,6 +32,7 @@
     "vite": "^5.4.2",
     "wait-on": "^7.2.0"
   },
+  "author": "KingIn Trading",
   "build": {
     "appId": "com.kingin.trading",
     "productName": "KingIn Trading System",
@@ -37,24 +41,53 @@
     },
     "files": [
       "electron/**/*",
-      "dist/**/*"
+      "dist/**/*",
+      "its_icon.png",
+      "its_icon.ico"
     ],
     "extraResources": [
       {
-        "from": "../backend",
-        "to": "backend",
+        "from": "../backend/dist/kingin_api",
+        "to": "backend"
+      },
+      {
+        "from": "../backend/models",
+        "to": "backend/models",
         "filter": [
-          "**/*",
-          "!__pycache__",
-          "!tests",
-          "!*.log",
-          "!*.txt"
+          "**/*.joblib",
+          "**/*.pkl",
+          "**/*.json",
+          "**/*.txt"
         ]
+      },
+      {
+        "from": "../backend/data",
+        "to": "backend/data",
+        "filter": [
+          "**/*.csv",
+          "**/*.db",
+          "**/*.json"
+        ]
+      },
+      {
+        "from": "../backend/config",
+        "to": "backend/config"
+      },
+      {
+        "from": "../backend/storage",
+        "to": "backend/storage",
+        "filter": [
+          "!logs/*"
+        ]
+      },
+      {
+        "from": "../backend/.env",
+        "to": "backend/.env"
       }
     ],
     "win": {
       "target": [
-        "portable"
+        "nsis"
       ],
       "icon": "its_icon.ico"
     },

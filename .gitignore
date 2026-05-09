@@ -72,3 +72,11 @@ node_modules
 dist
 dist_electron
 kingin-vite/dist
+build/
+backend/build/
+*.exe
+*.pkg
+*.pyz
+*.toc
+base_library.zip
+nul

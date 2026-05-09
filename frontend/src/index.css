@@ -3,20 +3,22 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --kg-dark: #080B12;
-  --kg-panel: #0F1420;
-  --kg-border: #1C2333;
-  --kg-gold: #FFD700;
-  --kg-success: #00C896;
-  --kg-danger: #FF3B5C;
+  --kg-dark: #0B0E14;
+  --kg-surface: rgba(255, 255, 255, 0.02);
+  --kg-panel: rgba(255, 255, 255, 0.03);
+  --kg-border: rgba(255, 255, 255, 0.05);
+  --kg-gold: #5D5FEF;
+  --kg-gold-muted: #4338ca;
+  --kg-success: #00E676;
+  --kg-danger: #FF2A55;
+  --kg-warning: #FF9800;
+  --kg-info: #00F0FF;
   --kg-muted: #6B7280;
-  --kg-text: #D1D5DB;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  --kg-text: #F3F4F6;
+  --kg-text-dim: #9CA3AF;
+  --kg-glass: blur(16px) saturate(180%);
+  --kg-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --kg-glow: 0 0 15px rgba(93, 95, 239, 0.5);
 }
 
 html, body, #root {
@@ -25,26 +27,44 @@ html, body, #root {
   margin: 0;
   padding: 0;
   background: var(--kg-dark);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(93, 95, 239, 0.15), transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(0, 240, 255, 0.1), transparent 50%);
   color: var(--kg-text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--kg-dark);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--kg-border);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: var(--kg-gold);
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(93, 95, 239, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--kg-gold);
 }
 

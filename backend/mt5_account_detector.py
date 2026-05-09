@@ -49,14 +49,8 @@ class AccountDetector:
                 mt5.shutdown()
                 return None
             
-            # Get terminal info to get server name
-            terminal_info = mt5.terminal_info()
-            if not terminal_info:
-                mt5.shutdown()
-                return None
-            
             # Extract broker name from server
-            server = terminal_info.server
+            server = account_info.server
             broker = self._extract_broker(server)
             
             # Return detected credentials (note: password not accessible from MT5)
@@ -121,7 +115,7 @@ class AccountDetector:
         # Try to detect active MT5 account
         detected = self.detect_active_account()
         if detected and detected.get("login"):
-            print(f"✓ Detected active MT5 account: {detected['login']} on {detected['broker']}")
+            print(f" Detected active MT5 account: {detected['login']} on {detected['broker']}")
             # Try to get password from runtime creds if they match
             runtime = self.get_runtime_credentials()
             if runtime and runtime.get("login") == detected["login"]:
@@ -131,7 +125,7 @@ class AccountDetector:
         # Fall back to runtime credentials
         runtime = self.get_runtime_credentials()
         if runtime and runtime.get("login"):
-            print(f"✓ Using runtime credentials: {runtime['login']} on {runtime.get('server')}")
+            print(f" Using runtime credentials: {runtime['login']} on {runtime.get('server')}")
             return runtime
         
         raise RuntimeError(
@@ -178,10 +172,10 @@ class AccountDetector:
             with open(self.config_file, "w") as f:
                 json.dump(config, f, indent=2)
             
-            print(f"✓ Updated config with {creds.get('broker')} account {creds.get('login')}")
+            print(f" Updated config with {creds.get('broker')} account {creds.get('login')}")
             return True
         except Exception as e:
-            print(f"✗ Failed to update config: {e}")
+            print(f" Failed to update config: {e}")
             return False
 
 
@@ -208,16 +202,16 @@ def main():
     # Try to get active credentials
     try:
         creds = detector.get_active_credentials()
-        print(f"\n✓ Active credentials available for: {creds['login']} on {creds['broker']}")
+        print(f"\n Active credentials available for: {creds['login']} on {creds['broker']}")
     except Exception as e:
-        print(f"\n✗ No credentials available: {e}")
+        print(f"\n No credentials available: {e}")
     
     # Update config
     print("\nAttempting to update trading config...")
     if detector.update_config_with_active_account():
-        print("✓ Config updated successfully - system now uses active MT5 account")
+        print(" Config updated successfully - system now uses active MT5 account")
     else:
-        print("✗ Config update failed")
+        print(" Config update failed")
 
 
 if __name__ == "__main__":

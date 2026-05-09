@@ -43,66 +43,67 @@ class EngineLauncher:
         print("\n[1/3] Detecting active MT5 account...")
         try:
             creds = self.detector.get_active_credentials()
-            print(f"  ✓ Found account: {creds['login']}")
-            print(f"  ✓ Broker: {creds.get('broker', 'Unknown')}")
-            print(f"  ✓ Server: {creds['server']}")
+            print(f"   Found account: {creds['login']}")
+            print(f"   Broker: {creds.get('broker', 'Unknown')}")
+            print(f"   Server: {creds['server']}")
         except Exception as e:
             error_str = str(e)
             if "timeout" in error_str.lower() or "ipc" in error_str.lower():
-                print(f"  ⚠ MT5 Connection timeout: {e}")
+                print(f"   MT5 Connection timeout: {e}")
+                print(f"  [ERROR] MT5 Connection timeout: {e}")
                 print("\n  Troubleshooting IPC timeout:")
                 print("  1. If MT5 is open, close it")
                 print("  2. Run: python mt5_recovery.py")
                 print("  3. Then run: START_SYSTEM_SMART.bat")
                 return False
             else:
-                print(f"  ✗ ERROR: {e}")
+                print(f"  [ERROR] {e}")
                 print("  Tip: Make sure MT5 is open and logged in")
                 return False
         
         # Step 2: Update configuration
         print("\n[2/3] Updating configuration with active account...")
         if self.detector.update_config_with_active_account():
-            print("  ✓ Config updated")
+            print("   Config updated")
         else:
-            print("  ✗ Config update failed (non-fatal)")
+            print("   Config update failed (non-fatal)")
         
         # Step 3: Initialize MT5 with detected credentials
         print("\n[3/3] Initializing MT5 connection...")
         try:
             if not MT5_AVAILABLE:
-                print("  ⚠ MT5 Python library not available (demo mode)")
+                print("   MT5 Python library not available (demo mode)")
                 return self._create_demo_state()
             
             # Initialize
             if not mt5.initialize():
-                print(f"  ✗ MT5 initialization failed: {mt5.last_error()}")
+                print(f"   MT5 initialization failed: {mt5.last_error()}")
                 return False
             
             # Get account info
             account_info = mt5.account_info()
             if not account_info:
-                print(f"  ✗ Cannot read account info: {mt5.last_error()}")
+                print(f"   Cannot read account info: {mt5.last_error()}")
                 mt5.shutdown()
                 return False
             
-            print(f"  ✓ Connected to MT5")
-            print(f"  ✓ Account Balance: ${account_info.balance:,.2f}")
-            print(f"  ✓ Account Equity: ${account_info.equity:,.2f}")
+            print(f"   Connected to MT5")
+            print(f"   Account Balance: ${account_info.balance:,.2f}")
+            print(f"   Account Equity: ${account_info.equity:,.2f}")
             
             # Create initial engine state
             self._create_engine_state(account_info)
             self.is_running = True
             
             print("\n" + "="*70)
-            print("✓ ENGINE READY - Dashboard will receive live data")
+            print(" ENGINE READY - Dashboard will receive live data")
             print("="*70)
             
             mt5.shutdown()
             return True
             
         except Exception as e:
-            print(f"  ✗ Initialization error: {e}")
+            print(f"   Initialization error: {e}")
             return False
     
     def _create_demo_state(self):
@@ -172,11 +173,11 @@ class EngineLauncher:
     def run(self):
         """Run the engine launcher"""
         if self.initialize():
-            print("\n✓ Engine launcher completed successfully")
-            print("✓ Dashboard is now receiving live data")
+            print("\n Engine launcher completed successfully")
+            print(" Dashboard is now receiving live data")
             return 0
         else:
-            print("\n✗ Engine launcher failed")
+            print("\n Engine launcher failed")
             return 1
 
 

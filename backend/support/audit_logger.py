@@ -13,9 +13,20 @@ class AuditLogger:
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
             "module": module,
             "event": event,
-            "metadata": metadata
+            "data": metadata
         }
-        
+        self._write_entry(entry)
+
+    def log_trade(self, signal: Dict[str, Any]):
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
+            "module": "EXECUTION",
+            "event": "TRADE_EXECUTED",
+            "data": signal
+        }
+        self._write_entry(entry)
+
+    def _write_entry(self, entry: Dict[str, Any]):
         # Append to file
         try:
             entries = []
@@ -23,11 +34,14 @@ class AuditLogger:
                 with open(self.log_path, "r") as f:
                     content = f.read().strip()
                     if content:
-                        entries = json.loads(content)
+                        try:
+                            entries = json.loads(content)
+                        except:
+                            entries = []
             
             entries.append(entry)
             
             with open(self.log_path, "w") as f:
                 json.dump(entries[-1000:], f, indent=4) # Keep last 1000 entries
         except Exception as e:
-            print(f"[AuditLogger] Error logging event: {e}")
+            print(f"[AuditLogger] Error writing log entry: {e}")

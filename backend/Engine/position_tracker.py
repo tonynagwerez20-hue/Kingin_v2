@@ -54,7 +54,8 @@ class PositionTracker:
         entry_price: float, 
         lots: float, 
         sl: float,
-        mt5_ticket: int = 0
+        mt5_ticket: int = 0,
+        ml_context: Optional[Dict] = None
     ) -> None:
         """
         Record a new open position.
@@ -74,7 +75,8 @@ class PositionTracker:
             "lots": lots,
             "sl": sl,
             "entry_time": time.time(),
-            "mt5_ticket": mt5_ticket
+            "mt5_ticket": mt5_ticket,
+            "ml_context": ml_context
         }
         
         # Backup to database

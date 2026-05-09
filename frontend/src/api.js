@@ -12,7 +12,8 @@ if (isElectron) {
     const res = await window.electronAPI.call({
       method: config.method,
       url: config.url,
-      data: config.data
+      data: config.data,
+      headers: config.headers
     });
     return {
       data: res.data,
@@ -34,5 +35,21 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('kingin_jwt');
+      localStorage.removeItem('kingin_ctrl');
+      // Force reload to show login screen if required, 
+      // but in this version we often bypass login for local ease.
+      if (window.location.pathname !== '/login') {
+         // window.location.reload(); 
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

@@ -1,0 +1,5 @@
+﻿src/hooks/useWebSocket.ts(3,58): error TS7016: Could not find a declaration file for module 'react'. 'C:/Users/LENOVO/Desktop/kingin-master/frontend/node_modules/react/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react` if it exists or add a new declaration (.d.ts) file containing `declare module 'react';`
+src/hooks/useWebSocket.ts(190,18): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/store/useAppStore.ts(1,24): error TS2307: Cannot find module 'zustand' or its corresponding type declarations.
+src/store/useAppStore.ts(30,46): error TS7006: Parameter 'set' implicitly has an 'any' type.

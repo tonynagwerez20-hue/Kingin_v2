@@ -36,6 +36,11 @@ def download_bars_chunked(symbol, timeframe, start_date, end_date, chunk_days=36
         logger.error(f"Unsupported timeframe: {timeframe}")
         return None
 
+    # Ensure symbol is selected in Market Watch
+    if not mt5.symbol_select(symbol, True):
+        logger.error(f"Failed to select symbol {symbol}")
+        return None
+
     all_rates = []
     current_start = start_date
     total_bars = 0
@@ -80,11 +85,16 @@ def main():
     symbol = config.get("trading", {}).get("symbol", "XAUUSD")
     
     # MT5 Auth
-    if not mt5.initialize(
-        login=dp_cfg.get("login"),
-        password=dp_cfg.get("password"),
-        server=dp_cfg.get("server")
-    ):
+    login = dp_cfg.get("login")
+    password = dp_cfg.get("password")
+    server = dp_cfg.get("server")
+    
+    if login:
+        success = mt5.initialize(login=int(login), password=password, server=server)
+    else:
+        success = mt5.initialize()
+        
+    if not success:
         logger.error(f"MT5 Auth Failed: {mt5.last_error()}")
         return
 

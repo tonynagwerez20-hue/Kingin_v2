@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from .layers import (
     SessionFilterLayer, H1StructuralBiasLayer, ZoneQualityLayer,
-    LiquidityEventLayer, MicrostructureShiftLayer, DisplacementLayer
+    LiquidityEventLayer, MicrostructureShiftLayer, DisplacementLayer,
+    MLFilterLayer
 )
 
 class V1FiltrationEngine:
@@ -98,3 +99,15 @@ class V1FiltrationEngine:
             return prev_max + sl_buffer
         
         return None
+
+    def record_trade_outcome(self, signal: Dict, confidence: float, outcome: int, metadata: Optional[Dict] = None):
+        """
+        Record a trade outcome for the ML layer to learn from.
+        """
+        for layer in self.layers:
+            if layer.__class__.__name__ == "MLFilterLayer":
+                engine = layer._get_engine()
+                if engine:
+                    engine.record_outcome(signal, confidence, outcome, metadata)
+                    return True
+        return False

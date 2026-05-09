@@ -54,6 +54,8 @@ class TradingLoopController:
         self.last_balance_check       = 0
         self.loop_interval            = 1.0
         self.balance_refresh_interval = 300
+        self.processed_tickets = set()
+        self.last_history_check = 0
 
     # ──────────────────────────────────────────────────────────────────
     # Data fetching
@@ -74,15 +76,35 @@ class TradingLoopController:
 
     async def update_account_balance(self) -> None:
         current_time = time.time()
-        if current_time - self.last_balance_check > self.balance_refresh_interval:
-            if self.bridge and self.bridge.connected:
-                fetched = self.bridge.get_account_balance()
-                if fetched is not None:
-                    self.account_balance = fetched
-                    self._account["balance"] = fetched
+        if current_time - self.last_balance_check > 5:  # Check connection/balance more frequently (every 5s)
+            if self.bridge:
+                # Always refresh the connection status
+                is_connected = self.bridge.check_connection()
+                
+                # Store connection status in DB for the dashboard
+                if self.db:
+                    self.db.set_state("bridge_connected", is_connected)
+                    self.db.set_state("bridge_last_check", current_time)
+
+                # Fetch balance/equity. The bridge internally handles falling back to 
+                # direct MT5 session if ZMQ is down.
+                fetched_balance = self.bridge.get_account_balance()
+                fetched_equity = self.bridge.get_account_equity()
+
+                if fetched_balance is not None:
+                    self.account_balance = fetched_balance
+                    self._account["balance"] = fetched_balance
                     if self.db:
                         self.db.set_state("account_balance", self.account_balance)
-                        self.db.set_state("balance_last_sync", current_time)
+                
+                if fetched_equity is not None:
+                    self._account["equity"] = fetched_equity
+                    if self.db:
+                        self.db.set_state("account_equity", fetched_equity)
+                
+                if self.db and (fetched_balance is not None or fetched_equity is not None):
+                    self.db.set_state("balance_last_sync", current_time)
+
             self.last_balance_check = current_time
 
     # ──────────────────────────────────────────────────────────────────
@@ -348,12 +370,44 @@ class TradingLoopController:
         # Use the enriched signal for execution
         enriched_signal = signal_dict
 
+        # Attach filtration layers to the signal for auditing and dashboard
+        if filtration_result and "layer_results" in filtration_result:
+            enriched_signal["layers"] = filtration_result["layer_results"]
+
         # ── Execute ───────────────────────────────────────────────────
         if self.bridge and self.bridge.connected and not self.backtest_mode:
             try:
                 result = self.bridge.send_signal(enriched_signal)
                 if result:
                     print(f"[TradingLoop] Signal executed: {enriched_signal}")
+                    
+                    # Store ML context in position tracker for later learning
+                    ml_context = None
+                    if filtration_result and "layer_results" in filtration_result:
+                        for res in filtration_result["layer_results"]:
+                            # Check if res is a dict (V1FiltrationEngine returns dicts)
+                            if isinstance(res, dict) and "MLFilterLayer" in str(res.get("reason", "")):
+                                ml_context = {
+                                    "signal": enriched_signal,
+                                    "confidence": res.get("confidence", 0.5)
+                                }
+                                break
+                    
+                    ticket = 0
+                    if isinstance(result, dict):
+                        ticket = result.get("ticket", 0)
+                    
+                    if self.position_tracker:
+                        self.position_tracker.open_position(
+                            direction=enriched_signal["action"],
+                            symbol=enriched_signal["symbol"],
+                            entry_price=enriched_signal["price"],
+                            lots=enriched_signal["lots"],
+                            sl=enriched_signal["sl"],
+                            mt5_ticket=ticket,
+                            ml_context=ml_context
+                        )
+
                     if self.audit_logger:
                         self.audit_logger.log_trade(enriched_signal)
                     return True
@@ -494,6 +548,51 @@ class TradingLoopController:
             return True
         return False
 
+    async def check_trade_history(self) -> None:
+        """Poll MT5 for closed trades and update ML layer."""
+        current_time = time.time()
+        # Check history every 60 seconds
+        if current_time - self.last_history_check < 60:
+            return
+            
+        self.last_history_check = current_time
+        
+        if not self.bridge or not self.bridge.connected or self.backtest_mode:
+            return
+            
+        try:
+            history = self.bridge.get_trade_history(days=1)
+            if not history:
+                return
+                
+            for trade in history:
+                ticket = trade.get("ticket")
+                if not ticket or ticket in self.processed_tickets:
+                    continue
+                
+                # This is a new closed trade!
+                pnl = trade.get("profit", 0) + trade.get("commission", 0) + trade.get("swap", 0)
+                outcome = 1 if pnl > 0 else 0
+                
+                # Check if we have the ML context for this trade
+                pos_info = self.position_tracker.get_position_info() if self.position_tracker else None
+                
+                if pos_info and pos_info.get("mt5_ticket") == ticket:
+                    ml_ctx = pos_info.get("ml_context")
+                    if ml_ctx and self.filtration:
+                        print(f"[ML] Learning from trade {ticket}: outcome={'WIN' if outcome else 'LOSS'} (PnL: {pnl:.2f})")
+                        self.filtration.record_trade_outcome(
+                            signal=ml_ctx["signal"],
+                            confidence=ml_ctx["confidence"],
+                            outcome=outcome,
+                            metadata={"ticket": ticket, "pnl": pnl}
+                        )
+                
+                self.processed_tickets.add(ticket)
+                
+        except Exception as e:
+            print(f"[TradingLoop] Error checking history: {e}")
+
     # ──────────────────────────────────────────────────────────────────
     # Main loop
     # ──────────────────────────────────────────────────────────────────
@@ -502,6 +601,8 @@ class TradingLoopController:
         print("\n" + "=" * 60)
         print("TRADING LOOP STARTED")
         print("=" * 60 + "\n")
+
+        last_heartbeat = 0
 
         async with aiohttp.ClientSession() as session:
             while True:
@@ -527,6 +628,19 @@ class TradingLoopController:
                         h1_candles, m15_candles, m5_candles, tick=tick
                     )
 
+                    # --- HEARTBEAT LOGGING (For Dashboard Sync) ---
+                    if time.time() - last_heartbeat > 10:
+                        if self.audit_logger:
+                            heartbeat_data = {
+                                "status": "RUNNING",
+                                "regime": result.get("regime", "STABLE"),
+                                "bias": result.get("htf_bias", "NEUTRAL"),
+                                "layers": result.get("filtration", {}).get("layer_results", []),
+                                "killzone": result.get("filtration", {}).get("layer_results", [{}])[0].get("reason", "N/A") if result.get("filtration") else "N/A"
+                            }
+                            self.audit_logger.log_event("SYSTEM", "HEARTBEAT", heartbeat_data)
+                        last_heartbeat = time.time()
+
                     # Standard signal path
                     if result.get("signal"):
                         await self.execute_signal(
@@ -545,6 +659,9 @@ class TradingLoopController:
                     # News scalp path
                     if result.get("news_scalp_signal"):
                         await self.execute_news_scalp(result["news_scalp_signal"], tick=tick)
+
+                    # Update ML feedback loop
+                    await self.check_trade_history()
 
                     await asyncio.sleep(self.loop_interval)
 

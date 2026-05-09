@@ -18,9 +18,21 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
+SET "BACKEND_DIR=%ROOT_DIR%backend"
+
+echo [0/4] Building standalone Python backend...
+cd /d "%BACKEND_DIR%"
+call python build_backend.py
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Backend build failed.
+    pause
+    exit /b 1
+)
+
 cd /d "%FRONTEND_DIR%"
 
-echo [1/3] Installing frontend dependencies...
+echo.
+echo [1/4] Installing frontend dependencies...
 call npm install
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] npm install failed.
@@ -29,7 +41,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [2/3] Building React production bundle...
+echo [3/4] Building React production bundle...
 call npm run build
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Vite build failed.
@@ -38,7 +50,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [3/3] Packaging Electron Application...
+echo [4/4] Packaging Electron Application...
 echo This will create a portable Windows executable in frontend\dist_electron
 call npm run electron:build
 if %ERRORLEVEL% neq 0 (

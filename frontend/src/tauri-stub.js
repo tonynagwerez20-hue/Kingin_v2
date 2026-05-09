@@ -8,12 +8,12 @@ const _call = async (path, method = 'GET', body = null) => {
   const url = `${API_BASE}${path}`;
   
   if (hasElectronAPI) {
-    // Use Electron IPC Bridge (works in both dev and production)
-    console.log(`[tauri-stub] Electron API Call: ${method} ${url}`);
-    return window.electronAPI.call(url, {
+    const res = await window.electronAPI.call({
+      url,
       method,
       data: body
     });
+    return res.data;
   }
 
   // Fallback to fetch (Vite Dev Server Proxy)

@@ -38,6 +38,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from enum import Enum
 from typing import Optional, Dict, List, Tuple
+from delta_learner import DeltaLearner
 
 # Setup logging
 logging.basicConfig(
@@ -52,12 +53,12 @@ os.makedirs("data", exist_ok=True)
 
 # CONFIG
 CONFIG = {
-    "model_path": "models/lgbm_signal_filter.pkl",
+    "model_path": "models/lgbm_signal_filter_20y.json",
     "trade_log_path": "data/trade_log.json",
-    "hist_data_path": "data/XAUUSDm_H1_8 years data.csv",
+    "hist_data_path": "data/backtest_20y/XAUUSD_H4_20y.csv",
     
     # LightGBM settings
-    "lgbm_threshold": 0.62,
+    "lgbm_threshold": 0.65,
     "lgbm_retrain_days": 7,
     "lgbm_window_days": 120,
     "lgbm_min_samples": 30,
@@ -285,25 +286,39 @@ class LightGBMFilter:
         path = self.cfg["model_path"]
         if Path(path).exists():
             try:
-                data = joblib.load(path)
-                self.model = data["model"]
-                self.last_trained = data["trained_at"]
-                logger.info(f"LightGBM loaded: {self.last_trained}")
+                if str(path).endswith('.json'):
+                    with open(path) as f:
+                        data = json.load(f)
+                    self.weights = data.get("weights")
+                    self.last_trained = data.get("trained_at")
+                    self.model_type = data.get("model_type", "json_weights")
+                    logger.info(f"LightGBM JSON weights loaded: {self.last_trained}")
+                else:
+                    data = joblib.load(path)
+                    self.model = data["model"]
+                    self.last_trained = data["trained_at"]
+                    self.model_type = "pickle"
+                    logger.info(f"LightGBM Pickle loaded: {self.last_trained}")
             except Exception as e:
                 logger.warning(f"Model load failed: {e}")
     
     def _save(self, n: int, win_rate: float):
+        # We don't save JSON from here yet, only pickle for weekly retrains
         joblib.dump({
             "model": self.model,
             "trained_at": self.last_trained,
             "train_samples": n,
             "train_win_rate": round(win_rate, 4)
-        }, self.cfg["model_path"])
+        }, "models/lgbm_signal_filter.pkl")
     
     def needs_retrain(self) -> bool:
         if self.last_trained is None:
             return True
-        age = (datetime.utcnow() - self.last_trained).days
+        if isinstance(self.last_trained, str):
+            dt = datetime.fromisoformat(self.last_trained)
+        else:
+            dt = self.last_trained
+        age = (datetime.utcnow() - dt).days
         return age >= self.cfg["lgbm_retrain_days"]
     
     def train(self, trade_log: TradeLog, verbose: bool = True) -> bool:
@@ -317,14 +332,15 @@ class LightGBMFilter:
             return False
         
         X = np.array([[r["features"][k] for k in FEATURE_KEYS] 
-                    for r in df], dtype=np.float32)
-        y = np.array([r["outcome"] for r in df], dtype=int)
+                    for _, r in df.iterrows()], dtype=np.float32)
+        y = np.array([r["outcome"] for _, r in df.iterrows()], dtype=int)
         
         win_rate = y.mean()
         
         self.model = lgb.LGBMClassifier(**self.cfg["lgbm_params"])
         self.model.fit(X, y)
         self.last_trained = datetime.utcnow()
+        self.model_type = "pickle"
         self._save(len(df), win_rate)
         
         if verbose:
@@ -337,6 +353,22 @@ class LightGBMFilter:
     
     def score(self, features: dict) -> float:
         """P(win) for this signal."""
+        if hasattr(self, 'weights') and self.weights:
+            # Score using weights (Linear approximation for 20y model)
+            score = 0
+            for k in FEATURE_KEYS:
+                val = float(features.get(k, 0))
+                # Normalize session to 0-1 range for weight application
+                if k == "session": val /= 3.0
+                elif k == "htf_bias": val = (val + 1) / 2.0
+                
+                score += val * self.weights.get(k, 0)
+            
+            # Use training range normalization
+            min_s, max_score = 0, sum(self.weights.values())
+            confidence = score / (max_score + 1e-9)
+            return float(np.clip(confidence, 0.0, 1.0))
+            
         if self.model is None:
             return 0.5
         X = features_to_array(features)
@@ -348,56 +380,44 @@ class LightGBMFilter:
 # ============================================================================
 
 class RiverDriftMonitor:
-    """Online learning - updates after each trade."""
+    """
+    Online learning - updates after each trade.
+    Now powered by DeltaLearner for real-time weight adaptation.
+    """
     
     def __init__(self, config: dict = None):
         self.cfg = config or CONFIG
-        self.trade_count = 0
-        self.drift_count = 0
-        self.is_drifting = False
+        self.learner = DeltaLearner(
+            weights_path=os.path.join("models", "live_delta_weights.json"),
+            learning_rate=0.05
+        )
         self._recent = []
+        self.is_drifting = False
     
     def update(self, features: dict, outcome: int) -> bool:
-        """Update after trade closes - detect drift."""
+        """Update after trade closes - learn from the result."""
+        self.learner.learn(features, outcome)
+        
         self._recent.append(outcome)
         if len(self._recent) > self.cfg["drift_window"]:
             self._recent.pop(0)
-        self.trade_count += 1
         
-        # Simplified drift detection
+        # Detect drift (performance drop)
+        self.is_drifting = False
         if len(self._recent) >= self.cfg["drift_window"]:
             rec_win = sum(self._recent) / len(self._recent)
             if rec_win < self.cfg["drift_acc_threshold"]:
                 self.is_drifting = True
-                self.drift_count += 1
-                return True
+                return True # Drift detected
         
         return False
     
     def online_score(self, features: dict) -> float:
-        """
-        Secondary confidence score based on recent performance.
-        If we are in a winning streak, confidence increases.
-        If we are drifting (losing streak), confidence decreases.
-        """
-        if not self._recent:
-            return 0.5
-            
-        recent_win_rate = sum(self._recent) / len(self._recent)
-        
-        # If drifting, we penalize the score heavily
-        if self.is_drifting:
-            return min(0.45, recent_win_rate)
-            
-        return recent_win_rate
+        """Get confidence score from the self-learning apprentice brain."""
+        return self.learner.predict(features)
     
     def stats(self) -> dict:
-        return {
-            "trades_observed": self.trade_count,
-            "drift_events": self.drift_count,
-            "is_drifting": self.is_drifting,
-            "recent_win_rate": sum(self._recent)/len(self._recent) if self._recent else None
-        }
+        return self.learner.get_status()
 
 
 # ============================================================================

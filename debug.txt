@@ -1,0 +1,3 @@
+App starting. isPackaged: true
+Resources: C:\Users\LENOVO\Desktop\kingin-master\frontend\dist_electron\win-unpacked\resources
+AppPath: C:\Users\LENOVO\Desktop\kingin-master\frontend\dist_electron\win-unpacked\resources\app.asar

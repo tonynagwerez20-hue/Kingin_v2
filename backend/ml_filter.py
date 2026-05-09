@@ -13,11 +13,11 @@ from datetime import datetime
 
 log = logging.getLogger("ML_Filter")
 
-MODEL_PATH = "models/lgbm_signal_filter.json"
+MODEL_PATH = "models/lgbm_signal_filter_20y.json"
 TRADE_LOG_PATH = "data/trade_log.json"
 # Threshold will be loaded from model or use default
 CONFIG = {
-    "threshold": 0.5,  # Will be overridden by model if available
+    "threshold": 0.65,  # Higher precision for 20y model
 }
 
 def get_threshold() -> float:
@@ -111,14 +111,10 @@ def score_signal(features: dict) -> float:
     # Calculate weighted score
     score = sum(normalized_vector[i] * weights.get(FEATURE_KEYS[i], 0) for i in range(len(FEATURE_KEYS)))
     
-    # Use fixed score range based on feature weights
-    # Positive features contribute up to ~1.8, negative down to ~-0.75
-    min_score = -0.75
-    max_score = 1.71
-    
-    # Normalize to 0-1
-    if max_score > min_score:
-        confidence = (score - min_score) / (max_score - min_score)
+    # Use dynamic score range based on feature weights
+    max_score = sum(abs(v) for v in weights.values())
+    if max_score > 0:
+        confidence = score / max_score
     else:
         confidence = 0.5
     

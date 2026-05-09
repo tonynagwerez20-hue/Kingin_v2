@@ -7,14 +7,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        'kg-dark': '#080B12',
-        'kg-panel': '#0F1420',
-        'kg-border': '#1C2333',
-        'kg-gold': '#FFD700',
-        'kg-success': '#00C896',
-        'kg-danger': '#FF3B5C',
+        'kg-dark': '#0B0E14',
+        'kg-surface': 'rgba(255, 255, 255, 0.02)',
+        'kg-panel': 'rgba(255, 255, 255, 0.03)',
+        'kg-border': 'rgba(255, 255, 255, 0.05)',
+        'kg-gold': '#5D5FEF', /* Neon purple for primary actions */
+        'kg-accent': '#00F0FF', /* Electric cyan */
+        'kg-success': '#00E676', /* Neon green */
+        'kg-danger': '#FF2A55', /* Neon pink/red */
         'kg-muted': '#6B7280',
-        'kg-text': '#D1D5DB',
+        'kg-text': '#F3F4F6',
       },
       fontFamily: {
         'mono': ['JetBrains Mono', 'monospace'],

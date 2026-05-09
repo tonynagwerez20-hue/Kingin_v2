@@ -8,8 +8,10 @@ class Bridge:
     """
     Enhanced ZeroMQ Bridge to communicate with MetaTrader 5 EA.
     Supports both fire-and-forget signals (PUB) and request-reply (REQ) for acknowledgments.
+    Can also use a direct MT5 library session for high-fidelity data syncing.
     """
-    def __init__(self, pub_port: int = 5555, req_port: int = 5557):
+    def __init__(self, pub_port: int = 5555, req_port: int = 5557, mt5_session: Optional[Dict] = None):
+        self.mt5_session = mt5_session
         self.context = zmq.Context()
         
         # PUB socket for fire-and-forget signals (backward compatible)
@@ -176,18 +178,65 @@ class Bridge:
             print(f"[Bridge] Failed to reset REQ socket: {e}")
 
     def get_account_balance(self) -> Optional[float]:
-        """Query MT5 EA for current account balance."""
+        """Query MT5 for current account balance. Favors direct MT5 session."""
+        if self.mt5_session:
+            try:
+                import MetaTrader5 as mt5
+                info = mt5.account_info()
+                if info:
+                    return info.balance
+            except:
+                pass
+        
         response = self._request_json({"type": "GET_BALANCE"})
         if response and response.get("status") == "SUCCESS":
             balance = response.get("balance", 0.0)
-            print(f"[Bridge] Account balance: ${balance:.2f}")
+            print(f"[Bridge] Account balance (ZMQ): ${balance:.2f}")
             return balance
         return None
 
+    def get_account_equity(self) -> Optional[float]:
+        """Query MT5 for current account equity. Favors direct MT5 session."""
+        if self.mt5_session:
+            try:
+                import MetaTrader5 as mt5
+                info = mt5.account_info()
+                if info:
+                    return info.equity
+            except:
+                pass
+        
+        response = self._request_json({"type": "GET_EQUITY"})
+        if response and response.get("status") == "SUCCESS":
+            return response.get("equity", 0.0)
+        return None
+
     def get_open_positions(self) -> List[Dict]:
-        """Query MT5 EA for currently open positions."""
-        # Note: Using 'GET_POSITIONS' as it was previously attempted, but adding reset on fail.
-        # If this fails with 'Unknown request type', we might need to check EA source.
+        """Query MT5 for currently open positions. Favors direct MT5 session."""
+        if self.mt5_session:
+            try:
+                import MetaTrader5 as mt5
+                pos = mt5.positions_get()
+                if pos is not None:
+                    return [
+                        {
+                            "ticket": p.ticket,
+                            "symbol": p.symbol,
+                            "type": "BUY" if p.type == 0 else "SELL",
+                            "lots": p.volume,
+                            "open_price": p.price_open,
+                            "current_price": p.price_current,
+                            "sl": p.sl,
+                            "tp": p.tp,
+                            "floating_pnl": p.profit,
+                            "open_time": p.time
+                        }
+                        for p in pos
+                    ]
+            except:
+                pass
+
+        # Fallback to ZMQ
         response = self._request_json({"type": "GET_POSITIONS"})
         if response and response.get("status") == "SUCCESS":
             return response.get("positions", [])

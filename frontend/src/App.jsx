@@ -1,21 +1,22 @@
-// App.jsx - Main application shell
-// Handles authentication state and renders Login or KingIn Dashboard
-
-import { useState, useEffect } from 'react';
-import Login from './Login.jsx';
-import KingInDashboard from './KingInDashboard.jsx';
-import SetupWizard from './SetupWizard.jsx';
+import React, { useState, useEffect } from 'react';
+import MainLayout from './components/MainLayout';
+import Overview from './components/panels/Overview';
+import TradingPanel from './components/panels/TradingPanel';
+import PortfolioPanel from './components/panels/PortfolioPanel';
+import SystemPanel from './components/panels/SystemPanel';
+import SettingsPanel from './components/panels/SettingsPanel';
 import RiskDisclaimer from './RiskDisclaimer.jsx';
+import SetupWizard from './SetupWizard.jsx';
+import useStore from './store/useStore';
 import api from './api.js';
-import './kingin.css';
+import './index.css';
 
 const App = () => {
-  const [sessionToken, setSessionToken] = useState(null);
+  const { activePanel, isInitializing, setConnected, retryCount } = useStore();
   const [isConfigured, setIsConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
 
-  // Check if disclaimer was accepted within the last 30 days
+  // Check if disclaimer was accepted
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(() => {
     const ts = localStorage.getItem('kingin_disclaimer_ts');
     if (!ts) return false;
@@ -24,128 +25,76 @@ const App = () => {
 
   useEffect(() => {
     const checkStatus = async () => {
-      const MAX_RETRIES = 30;
+      const MAX_RETRIES = 5; // Reduced retries for faster boot, MainLayout handles persistent sync
       let configured = true;
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        setRetryCount(attempt + 1);
-        try {
-          const statusRes = await api.get('/system/status');
-          configured = statusRes.data.configured ?? true;
-          break;
-        } catch {
-          if (attempt < MAX_RETRIES - 1) {
-            await new Promise(r => setTimeout(r, 1000));
-          }
-        }
+      
+      try {
+        const statusRes = await api.get('/system/status');
+        configured = statusRes.data.configured ?? true;
+        setConnected(true);
+      } catch {
+        setConnected(false);
       }
+      
       setIsConfigured(configured);
-
-      const token = localStorage.getItem('kingin_jwt');
-      if (token) setSessionToken(token);
-
       setLoading(false);
     };
 
     checkStatus();
-  }, []);
+  }, [setConnected]);
 
-  const handleLogin = (token) => {
-    setSessionToken(token);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('kingin_jwt');
-    localStorage.removeItem('kingin_ctrl');
-    setSessionToken(null);
-  };
-
-  const handleSetupComplete = () => {
-    setIsConfigured(true);
-  };
-
+  const handleSetupComplete = () => setIsConfigured(true);
   const handleDisclaimerAccept = () => {
     localStorage.setItem('kingin_disclaimer_ts', Date.now().toString());
     setDisclaimerAccepted(true);
   };
 
-  const handleDisclaimerDecline = () => {
-    window.close();
+  const renderPanel = () => {
+    switch (activePanel) {
+      case 'overview': return <Overview />;
+      case 'trading': return <TradingPanel />;
+      case 'portfolio': return <PortfolioPanel />;
+      case 'system': return <SystemPanel />;
+      case 'intelligence': return <Overview />; // Placeholder
+      case 'settings': return <SettingsPanel />;
+      default: return <Overview />;
+    }
   };
 
   // Loading state
   if (loading) {
     return (
-      <div style={styles.loading}>
-        <div style={styles.loadingTitle}>INITIALIZING KINGIN...</div>
-        <div style={styles.loadingSubtitle}>
-          Connecting to API — Attempt {retryCount}/30
-        </div>
-        <div style={styles.loadingBar}>
-          <div style={{ ...styles.loadingBarFill, width: `${(retryCount / 30) * 100}%` }} />
+      <div className="h-screen bg-kg-dark flex flex-col items-center justify-center gap-6 font-mono">
+        <div className="w-16 h-16 border-4 border-kg-gold/20 border-t-kg-gold rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="text-lg font-bold text-kg-gold tracking-[0.3em]">KINGIN SYSTEM</div>
+          <div className="text-[10px] text-kg-muted mt-2 uppercase tracking-widest">Initializing Secure Environment...</div>
         </div>
       </div>
     );
   }
 
-  // Risk disclaimer (first-time or every 30 days)
+  // Risk disclaimer
   if (!disclaimerAccepted) {
     return (
       <RiskDisclaimer
         onAccept={handleDisclaimerAccept}
-        onDecline={handleDisclaimerDecline}
+        onDecline={() => window.close()}
       />
     );
   }
 
-  // First-run setup wizard
+  // Setup wizard
   if (!isConfigured) {
     return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
-  // Render based on authentication state
-  return sessionToken ? (
-    <KingInDashboard onLogout={handleLogout} />
-  ) : (
-    <Login onLogin={handleLogin} />
+  // Dashboard - NO LOGIN REQUIRED
+  return (
+    <MainLayout>
+      {renderPanel()}
+    </MainLayout>
   );
-};
-
-const styles = {
-  loading: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-    background: '#000000',
-    color: '#00c8f0',
-    fontFamily: "'JetBrains Mono', monospace",
-    gap: '12px',
-  },
-  loadingTitle: {
-    fontSize: '18px',
-    fontWeight: 700,
-    letterSpacing: '4px',
-  },
-  loadingSubtitle: {
-    fontSize: '11px',
-    color: '#445566',
-    letterSpacing: '1px',
-  },
-  loadingBar: {
-    width: '220px',
-    height: '2px',
-    background: '#111',
-    borderRadius: '2px',
-    overflow: 'hidden',
-    marginTop: '4px',
-  },
-  loadingBarFill: {
-    height: '100%',
-    background: '#00c8f0',
-    borderRadius: '2px',
-    transition: 'width 0.4s ease',
-  },
 };
 
 export default App;

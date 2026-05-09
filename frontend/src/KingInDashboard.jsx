@@ -594,10 +594,11 @@ const SignalStatusBar = ({ engineState }) => {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
-      padding: '10px 16px', marginBottom: '16px',
-      background: 'var(--kg-surface, #0d0d0d)',
-      border: '1px solid var(--kg-border, #1a1a1a)',
-      borderRadius: '6px', fontSize: '11px', fontFamily: 'inherit',
+      padding: '12px 20px', marginBottom: '24px',
+      background: 'rgba(255, 140, 0, 0.05)',
+      border: '1px solid rgba(255, 140, 0, 0.2)',
+      borderRadius: '8px', fontSize: '11px', fontFamily: 'inherit',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
     }}>
       <span style={{ color: 'var(--kg-muted, #556)', letterSpacing: '1px' }}>LIVE SIGNAL</span>
       <span style={{ color: signalColor, fontWeight: 700, letterSpacing: '2px' }}>{signal}</span>
@@ -620,110 +621,166 @@ const SignalStatusBar = ({ engineState }) => {
       {kz !== 'N/A' && <><span style={{ color: 'var(--kg-muted, #556)' }}>|</span><span style={{ color: '#aab' }}>KZ <span style={{ color: '#dde' }}>{kz}</span></span></>}
 
     </div>
-  );
-};
-
-const OverviewPanel = ({ accountStats, positions, totalPnl, engineState }) => {
+  );const OverviewPanel = ({ accountStats, positions, totalPnl, engineState }) => {
   const [equityCurve] = useState(generateEquityCurve);
-  const [alerts] = useState(generateAlerts);
   
-  const topPositions = positions.slice(0, 5);
+  // FundedNext-style objectives
+  const dailyLoss = accountStats.todayPnl < 0 ? Math.abs(accountStats.todayPnl) : 0;
+  const dailyLimit = accountStats.balance * 0.05; // 5% daily limit
+  const dailyProgress = Math.min(100, (dailyLoss / dailyLimit) * 100);
   
+  const maxDrawdown = accountStats.equity < accountStats.balance ? (accountStats.balance - accountStats.equity) : 0;
+  const maxLimit = accountStats.balance * 0.10; // 10% max limit
+  const maxProgress = Math.min(100, (maxDrawdown / maxLimit) * 100);
+
   return (
     <div className="panel-content">
-      <div className="panel-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h1 className="panel-title">Overview</h1>
-          <p className="panel-subtitle">Real-time account and trading statistics</p>
+          <h1 className="panel-title" style={{ fontSize: '24px', letterSpacing: '0' }}>Welcome back, Admin</h1>
+          <p className="panel-subtitle">Here's what's happening with your account today.</p>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="stat-card" style={{ padding: '12px 20px', minWidth: '160px' }}>
+            <span className="stat-label">Account ID</span>
+            <span className="stat-value" style={{ fontSize: '16px' }}>{engineState?.account_id || 'Connecting...'}</span>
+          </div>
+          <div className="stat-card" style={{ padding: '12px 20px', minWidth: '160px' }}>
+            <span className="stat-label">Server</span>
+            <span className="stat-value" style={{ fontSize: '16px' }}>{engineState?.account_server || 'Detecting...'}</span>
+          </div>
         </div>
       </div>
 
-      <SignalStatusBar engineState={engineState} />
-      
-      <div className="stat-grid">
-        <StatCard label="BALANCE" value={formatCurrency(accountStats.balance)} subvalue="Account balance" highlight />
-        <StatCard label="EQUITY" value={formatCurrency(accountStats.equity)} subvalue="Live equity" />
-        <StatCard label="MARGIN USED" value={formatCurrency(accountStats.marginUsed)} subvalue={`${accountStats.marginPercent}% used`} />
-        <StatCard label="TODAY P&L" value={formatCurrency(accountStats.todayPnl)} highlight />
-        <StatCard label="OPEN TRADES" value={accountStats.openPositions} subvalue="live positions" />
-        <StatCard label="WIN RATE" value={accountStats.winRate > 0 ? formatPercent(accountStats.winRate) : 'N/A'} subvalue="last 30d" />
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+        <StatCard label="BALANCE" value={formatCurrency(accountStats.balance)} subvalue="Cash balance" />
+        <StatCard label="EQUITY" value={formatCurrency(accountStats.equity)} subvalue="Live account value" highlight />
+        <StatCard label="FLOATING P&L" value={formatCurrency(totalPnl)} trend={totalPnl >= 0 ? 1 : -1} />
+        <StatCard label="TODAY'S PROFIT" value={formatCurrency(accountStats.todayPnl)} trend={accountStats.todayPnl >= 0 ? 1 : -1} />
       </div>
-      
-      <div className="two-col">
-        <div className="two-col-main">
-          <div className="chart-container">
-            <div className="chart-header">
-              <span className="chart-title">Equity Curve (7 Days)</span>
-              <div className="chart-controls">
-                {['1D', '7D', '1M', '3M'].map(tf => (
-                  <button key={tf} className={`chart-btn ${tf === '7D' ? 'active' : ''}`}>{tf}</button>
-                ))}
+
+      <div className="two-col" style={{ gap: '24px' }}>
+        <div className="two-col-main" style={{ flex: '1.5' }}>
+          <div className="data-table-container" style={{ padding: '24px' }}>
+            <div className="chart-header" style={{ marginBottom: '24px' }}>
+              <span className="chart-title" style={{ fontSize: '16px' }}>Trading Objectives</span>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              {/* Daily Loss Limit */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600 }}>Daily Loss Limit</span>
+                  <span style={{ fontSize: '12px', color: 'var(--kg-muted)' }}>{formatCurrency(dailyLoss)} / {formatCurrency(dailyLimit)}</span>
+                </div>
+                <div style={{ height: '8px', background: '#1C222D', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ 
+                    height: '100%', 
+                    width: `${dailyProgress}%`, 
+                    background: dailyProgress > 80 ? 'var(--kg-danger)' : 'var(--kg-gold)',
+                    transition: 'width 1s ease-out'
+                  }} />
+                </div>
+              </div>
+
+              {/* Max Drawdown */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600 }}>Maximum Drawdown</span>
+                  <span style={{ fontSize: '12px', color: 'var(--kg-muted)' }}>{formatCurrency(maxDrawdown)} / {formatCurrency(maxLimit)}</span>
+                </div>
+                <div style={{ height: '8px', background: '#1C222D', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ 
+                    height: '100%', 
+                    width: `${maxProgress}%`, 
+                    background: maxProgress > 80 ? 'var(--kg-danger)' : 'var(--kg-gold)',
+                    transition: 'width 1s ease-out'
+                  }} />
+                </div>
               </div>
             </div>
-            <div style={{ height: 200, display: 'flex', alignItems: 'flex-end', gap: '2px', padding: '20px 0' }}>
+          </div>
+
+          <div className="chart-container" style={{ marginTop: '24px', padding: '0', overflow: 'hidden', height: '450px' }}>
+            <iframe 
+              src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_76231&symbol=FX%3AXAUUSD&interval=5&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=FX%3AXAUUSD"
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              title="TradingView Chart"
+            />
+          </div>
+
+          <div className="chart-container" style={{ marginTop: '24px', padding: '24px' }}>
+            <div className="chart-header">
+              <span className="chart-title">Equity Growth</span>
+            </div>
+            <div style={{ height: 250, display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '20px 0' }}>
               {equityCurve.map((point, i) => (
                 <div key={i} style={{ 
                   flex: 1, 
-                  height: `${((point.equity - 23500) / 500) * 100}%`, 
-                  background: 'linear-gradient(180deg, var(--kg-gold), rgba(255, 215, 0, 0.3))',
-                  borderRadius: '2px 2px 0 0',
-                  minHeight: '20px',
+                  height: `${((point.equity - 23000) / 1500) * 100}%`, 
+                  background: 'linear-gradient(180deg, var(--kg-gold), transparent)',
+                  borderRadius: '4px 4px 0 0',
+                  opacity: 0.8
                 }} />
               ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--kg-muted)' }}>
-              {equityCurve.map((point, i) => (
-                <span key={i}>{point.date.slice(5)}</span>
-              ))}
-            </div>
           </div>
         </div>
-        
-        <div className="two-col-side">
+
+        <div className="two-col-side" style={{ flex: '1' }}>
           <div className="data-table-container">
-            <div className="chart-header">
-              <span className="chart-title">Open Positions</span>
-              <button className="btn btn-sm">View All →</button>
+            <div className="chart-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--kg-border)' }}>
+              <span className="chart-title">Active Positions</span>
             </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Dir</th>
-                  <th>P&L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topPositions.map(p => (
-                  <tr key={p.ticket}>
-                    <td className="text">{p.symbol}</td>
-                    <td><span className={`badge ${p.direction.toLowerCase()}`}>{p.direction}</span></td>
-                    <td className={`pnl-value ${p.pnl >= 0 ? 'positive' : 'negative'}`}>
-                      {p.pnl >= 0 ? '+' : ''}{formatCurrency(p.pnl)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ padding: '12px' }}>
+              {positions.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--kg-muted)' }}>
+                  No active positions
+                </div>
+              ) : (
+                positions.slice(0, 6).map(p => (
+                  <div key={p.ticket} style={{ 
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '12px', borderBottom: '1px solid var(--kg-border)',
+                    background: 'rgba(255,255,255,0.02)', borderRadius: '8px', marginBottom: '8px'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13px' }}>{p.symbol}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--kg-muted)' }}>{p.direction} {p.volume} Lots</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div className={`pnl-value ${p.pnl >= 0 ? 'positive' : 'negative'}`}>
+                        {p.pnl >= 0 ? '+' : ''}{formatCurrency(p.pnl)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--kg-muted)' }}>{formatPrice(p.currentPrice)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {positions.length > 6 && (
+              <div style={{ padding: '12px', textAlign: 'center' }}>
+                <button className="btn btn-sm" style={{ width: '100%' }}>View All Positions</button>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
-      
-      <div className="data-table-container">
-        <div className="chart-header">
-          <span className="chart-title">Recent Alerts</span>
-        </div>
-        <div className="alerts-feed">
-          {alerts.map((alert, i) => (
-            <div key={i} className="alert-item">
-              <span className="alert-time">{formatTime(alert.time)}</span>
-              <span className={`alert-badge ${alert.severity.toLowerCase()}`}>{alert.severity}</span>
-              <span className="alert-message">{alert.message}</span>
+
+          <div className="data-table-container" style={{ marginTop: '24px', padding: '24px' }}>
+            <div className="chart-header">
+              <span className="chart-title">Engine Pulse</span>
             </div>
-          ))}
+            <div className="alerts-feed" style={{ maxHeight: '300px' }}>
+              <SignalStatusBar engineState={engineState} />
+              <div style={{ fontSize: '11px', color: 'var(--kg-muted)', marginTop: '12px' }}>
+                System is monitoring {positions.length} trades with active risk defense.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+  );
+};
   );
 };
 
@@ -1604,14 +1661,14 @@ export default function KingInDashboard({ onLogout }) {
   };
   
   const sidebarItems = [
-    { id: 'overview', icon: '▦', label: 'Overview' },
-    { id: 'positions', icon: '☰', label: 'Positions' },
-    { id: 'trade-history', icon: '◷', label: 'History' },
-    { id: 'strategy-engine', icon: '⚙', label: 'Strategy' },
-    { id: 'risk-monitor', icon: '⛨', label: 'Risk' },
-    { id: 'market-watch', icon: '◈', label: 'Market' },
-    { id: 'system-logs', icon: '▸', label: 'Logs' },
-    { id: 'settings', icon: '⚡', label: 'Settings' },
+    { id: 'overview', icon: '📊', label: 'Dashboard' },
+    { id: 'positions', icon: '💼', label: 'Trading' },
+    { id: 'trade-history', icon: '📜', label: 'History' },
+    { id: 'strategy-engine', icon: '🤖', label: 'Neural Engine' },
+    { id: 'risk-monitor', icon: '🛡️', label: 'Risk Guard' },
+    { id: 'market-watch', icon: '📈', label: 'Markets' },
+    { id: 'system-logs', icon: '🖥️', label: 'Terminal' },
+    { id: 'settings', icon: '⚙️', label: 'Settings' },
   ];
   
   const runningStrategies = strategies.filter(s => s.status === 'RUNNING').length;
@@ -1656,85 +1713,22 @@ export default function KingInDashboard({ onLogout }) {
 
   return (
     <div className={`kingin-dashboard ${appState.sidebarExpanded ? 'sidebar-expanded' : ''}`}>
-      {/* Top Bar */}
-      <div className="top-bar">
-        <div className="top-left">
-          <span className="logo">KingIn</span>
-          <span className="logo-sub">CONTROL ROOM</span>
-        </div>
-        
-        <div className="top-center">
-          <div className={`status-badge ${connected ? (engineState?.running ? 'live' : 'connected') : 'offline'}`}>
-            {connected ? (engineState?.running ? 'ENGINE LIVE' : 'API CONNECTED') : 'OFFLINE'}
-          </div>
-          <div className="broker-time">{brokerTime.toLocaleTimeString()}</div>
-        </div>
-        
-        <div className="top-right">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
-            <button
-              onClick={handleEngineStart}
-              disabled={engineLoading || (engineState?.running === true)}
-              style={{
-                padding: '4px 10px', fontSize: '10px', fontWeight: 700,
-                background: 'transparent', border: '1px solid #00e87a', borderRadius: '3px',
-                color: '#00e87a', cursor: engineLoading || engineState?.running ? 'not-allowed' : 'pointer',
-                opacity: engineLoading || engineState?.running ? 0.4 : 1,
-                fontFamily: 'inherit', letterSpacing: '1px',
-              }}
-            >
-              START
-            </button>
-            <button
-              onClick={handleEngineStop}
-              disabled={engineLoading || !engineState?.running}
-              style={{
-                padding: '4px 10px', fontSize: '10px', fontWeight: 700,
-                background: 'transparent', border: '1px solid #ff2d4e', borderRadius: '3px',
-                color: '#ff2d4e', cursor: engineLoading || !engineState?.running ? 'not-allowed' : 'pointer',
-                opacity: engineLoading || !engineState?.running ? 0.4 : 1,
-                fontFamily: 'inherit', letterSpacing: '1px',
-              }}
-            >
-              STOP
-            </button>
-            {engineMessage && (
-              <span style={{ fontSize: '10px', color: '#ffaa00', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {engineMessage}
-              </span>
-            )}
-          </div>
-          <div className="top-stat">
-            <span className="value">{runningStrategies}/{strategies.length}</span>
-          </div>
-          <div className="top-stat">
-            <span>Open:</span>
-            <span className="value">{positions.length}</span>
-          </div>
-          <div className={`top-stat ${totalPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
-            <span>P&L:</span>
-            <span className="value">{totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)}</span>
-          </div>
-          <button className="notification-bell">
-            🔔
-            {appState.notificationCount > 0 && (
-              <span className="notification-badge">{appState.notificationCount}</span>
-            )}
-          </button>
-          <div className="user-menu" onClick={onLogout}>
-            <div className="user-avatar">KI</div>
-            <span className="user-name">Admin</span>
-            <span className="user-dropdown">▼</span>
-          </div>
-        </div>
-      </div>
-      
       {/* Sidebar */}
       <div 
         className="sidebar"
         onMouseEnter={() => appState.setSidebarExpanded(true)}
         onMouseLeave={() => appState.setSidebarExpanded(false)}
+        style={{ width: appState.sidebarExpanded ? 'var(--sidebar-w)' : 'var(--sidebar-collapsed)' }}
       >
+        <div style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ 
+            width: '32px', height: '32px', background: 'var(--kg-gold)', 
+            borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 900, color: '#000'
+          }}>K</div>
+          {appState.sidebarExpanded && <span style={{ fontWeight: 800, letterSpacing: '2px', fontSize: '18px' }}>KINGIN</span>}
+        </div>
+
         <div className="sidebar-nav">
           {sidebarItems.map(item => (
             <button
@@ -1742,46 +1736,64 @@ export default function KingInDashboard({ onLogout }) {
               className={`sidebar-item ${appState.activePanel === item.id ? 'active' : ''}`}
               onClick={() => appState.setActivePanel(item.id)}
             >
-              <span className="icon">{item.icon}</span>
-              <span className="label">{item.label}</span>
+              <span className="icon" style={{ fontSize: '16px' }}>{item.icon}</span>
+              <span className="label" style={{ display: appState.sidebarExpanded ? 'block' : 'none' }}>{item.label}</span>
             </button>
           ))}
         </div>
 
-        {/* Master Power Section in Sidebar */}
         <div className="sidebar-footer">
           <div className="master-power-container">
-            <div className="master-power-label">
-              {appState.sidebarExpanded ? 'SYSTEM MASTER POWER' : 'PWR'}
-            </div>
-            <div className="master-power-buttons">
+            <div className="master-power-buttons" style={{ flexDirection: appState.sidebarExpanded ? 'row' : 'column' }}>
               <button 
                 className={`power-btn start ${engineState?.running ? 'active' : ''}`}
                 onClick={handleEngineStart}
                 disabled={engineLoading || engineState?.running}
-                title="Start Trading Engine"
+                title="Start Engine"
               >
-                ON
-              </button>
-              <button 
-                className={`power-btn stop ${!engineState?.running ? 'active' : ''}`}
-                onClick={handleEngineStop}
-                disabled={engineLoading || !engineState?.running}
-                title="Stop Trading Engine"
-              >
-                OFF
+                {appState.sidebarExpanded ? 'START ENGINE' : 'ON'}
               </button>
             </div>
-            {engineMessage && appState.sidebarExpanded && (
-              <div className="engine-mini-msg">{engineMessage}</div>
-            )}
           </div>
         </div>
       </div>
       
-      {/* Main Content */}
-      <div className="main-content">
-        {panels[appState.activePanel] || panels.overview}
+      {/* Main Container */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Top Bar */}
+        <div className="top-bar" style={{ position: 'static', width: '100%' }}>
+          <div className="top-left">
+            <div className={`status-badge ${connected ? (engineState?.running ? 'live' : 'connected') : 'offline'}`}>
+              {connected ? (engineState?.running ? 'SYSTEM LIVE' : 'STANDBY') : 'DISCONNECTED'}
+            </div>
+            {engineMessage && <span style={{ fontSize: '11px', color: 'var(--kg-warning)' }}>{engineMessage}</span>}
+          </div>
+          
+          <div className="top-right">
+            <div className="top-stat">
+              <span className="label">EQUITY:</span>
+              <span className="value" style={{ color: 'var(--kg-gold)' }}>{formatCurrency(accountStats.equity)}</span>
+            </div>
+            <div className="top-stat">
+              <span className="label">BALANCE:</span>
+              <span className="value">{formatCurrency(accountStats.balance)}</span>
+            </div>
+            <div className={`top-stat ${accountStats.todayPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
+              <span className="label">TODAY:</span>
+              <span className="value">{accountStats.todayPnl >= 0 ? '+' : ''}{formatCurrency(accountStats.todayPnl)}</span>
+            </div>
+            <div style={{ width: '1px', height: '24px', background: 'var(--kg-border)', margin: '0 8px' }} />
+            <div className="user-menu" onClick={onLogout} style={{ border: 'none', background: 'transparent' }}>
+              <div className="user-avatar" style={{ borderRadius: '50%', width: '32px', height: '32px' }}>JD</div>
+              {appState.sidebarExpanded && <span className="user-name">Prop Trader</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="main-content" style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
+          {panels[appState.activePanel] || panels.overview}
+        </div>
       </div>
     </div>
   );

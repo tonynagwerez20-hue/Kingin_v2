@@ -8,8 +8,8 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   server: {
-    port: 5000,
-    host: '0.0.0.0',
+    port: 5173,
+    host: '127.0.0.1',
     allowedHosts: true,
     strictPort: true,
     proxy: {

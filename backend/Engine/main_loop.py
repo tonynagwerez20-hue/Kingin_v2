@@ -107,7 +107,7 @@ async def main():
     # Parse CLI Arguments
     parser = argparse.ArgumentParser(description="Hedge Gold Trading Engine")
     parser.add_argument("--backtest", action="store_true", help="Run in Backtest/Replay mode (records signals to CSV, skips MT5 execution)")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     
     backtest_mode = args.backtest
     if backtest_mode:

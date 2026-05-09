@@ -1,4 +1,5 @@
-
+from typing import List, Dict, Optional
+import datetime
 from .macro import MacroAuctionEngine
 from .correlation import CorrelationEngine
 from .liquidity import LiquidityEngine
@@ -85,3 +86,11 @@ class FiltrationController:
             return {"action": "LONG_ALLOWED", "reason": "All Clear"}
             
         return {"action": "NO_TRADE", "reason": "Default"}
+
+    def record_trade_outcome(self, signal: Dict, confidence: float, outcome: int, metadata: Optional[Dict] = None):
+        """
+        Record a trade outcome for the ML layer.
+        """
+        if hasattr(self.v1, 'record_trade_outcome'):
+            return self.v1.record_trade_outcome(signal, confidence, outcome, metadata)
+        return False
