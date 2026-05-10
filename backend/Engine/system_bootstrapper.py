@@ -254,6 +254,7 @@ class SystemBootstrapper:
         """
         print("[Main] Waiting for DTC to populate buffers...")
         warmup_start = time.time()
+        failed_attempts = 0
         
         async with aiohttp.ClientSession() as session:
             while time.time() - warmup_start < warmup_timeout:
@@ -282,6 +283,10 @@ class SystemBootstrapper:
                 
                 except Exception as e:
                     print(f"[Warmup] API check failed: {e}")
+                    failed_attempts += 1
+                    if failed_attempts >= 5:
+                        print(f"[WARN] [Warmup] API server offline. Aborting warmup early.")
+                        return False
                 
                 await asyncio.sleep(2)
             

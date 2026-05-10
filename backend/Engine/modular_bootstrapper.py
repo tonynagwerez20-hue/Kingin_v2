@@ -20,6 +20,7 @@ from Engine.igof.igof_engine import IGOFEngine
 from Engine.base_interfaces import BaseDataProvider, BaseFiltrationLayer, BaseStrategy, BaseRiskRule
 from Engine.lite_log_handler import setup_lite_logging
 from storage.hedge_db import HedgeDB
+from config_loader import load_trading_params
 
 # ── ZMQ Bridge import ─────────────────────────────────────────────────────────
 # zmq_bridge.py must be in the same Engine/ folder as this file.
@@ -73,7 +74,7 @@ class ModularBootstrapper:
         # This is the root cause of "The system cannot find the path specified".
         _p = Path(config_path)
         self.config_path = _p if _p.is_absolute() else BASE_DIR / _p
-        self.config = self._load_json_config()
+        self.config = load_trading_params()
 
         # Performance Settings
         perf_cfg = self.config.get("performance", {})
@@ -185,7 +186,7 @@ class ModularBootstrapper:
             logging.shutdown()
             sys.exit(1)
 
-        # 2. Load Filtration Layers
+        # 3. Layer Filtration (IGOF)
         layers_cfg = pipeline_cfg.get("filtration_layers", [])
         
         # --- LITE CONFIG SUPPORT ---

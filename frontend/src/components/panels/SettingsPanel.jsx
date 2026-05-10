@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Key, Server, Percent, Target, Save, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import useStore from '../../store/useStore';
-import api from '../../api';
+import api, { setNewsToggle } from '../../api';
+import NewsToggle from '../NewsToggle';
 
 const SettingsField = ({ label, icon: Icon, type = "text", value, onChange, placeholder }) => (
   <div className="space-y-2">
@@ -28,7 +29,8 @@ const SettingsPanel = () => {
   const [config, setConfig] = useState({
     broker: { login: '', password: '', server: '' },
     risk: { lot_size: 0.01, risk_percent: 1.0 },
-    system: { symbol: 'XAUUSD' }
+    system: { symbol: 'XAUUSD' },
+    news: { participate: false }
   });
 
   useEffect(() => {
@@ -48,6 +50,9 @@ const SettingsPanel = () => {
           },
           system: {
             symbol: data.trading?.symbol || 'XAUUSD'
+          },
+          news: {
+            participate: data.news_participate || false
           }
         });
       } catch (err) {
@@ -81,6 +86,20 @@ const SettingsPanel = () => {
       setStatus({ type: 'error', message: 'Connection failure: ' + err.message });
     } finally {
       setLoading(false);
+      setTimeout(() => setStatus({ type: '', message: '' }), 3000);
+    }
+  };
+
+  const handleNewsToggle = async (val) => {
+    try {
+      const res = await setNewsToggle(val);
+      if (res.data.success) {
+        setConfig(prev => ({ ...prev, news: { participate: val } }));
+        setStatus({ type: 'success', message: `News mode updated: ${val ? 'PARTICIPATE' : 'SIT OUT'}` });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Failed to update news mode' });
+    } finally {
       setTimeout(() => setStatus({ type: '', message: '' }), 3000);
     }
   };
@@ -193,6 +212,12 @@ const SettingsPanel = () => {
               * The neural engine optimizes trade confluence specifically for the selected symbol.
             </p>
           </div>
+
+          <NewsToggle 
+            participate={config.news.participate} 
+            onChange={handleNewsToggle}
+            disabled={loading}
+          />
         </div>
       </div>
     </div>

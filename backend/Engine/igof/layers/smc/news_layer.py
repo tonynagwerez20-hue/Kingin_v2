@@ -585,6 +585,13 @@ class NewsEventLayer(SMCLayerBase):
         """Core logic shared between validate() and process()."""
         self._refresh_calendar()  # non-blocking, spawns background thread
 
+        # Check if we should ignore news filters based on user participation preference
+        # Defaults to sitting out (protective) if not specified.
+        participate = data.get("news_participate", False)
+        if participate:
+            self._reason = "News filter bypassed: User chooses to participate in market during news."
+            return True, 1.0
+
         # ── 1. Pre-event blocking window ──────────────────────────────
         upcoming = self._get_upcoming_events(self.pre_block_minutes)
         if upcoming:

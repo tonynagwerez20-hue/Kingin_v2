@@ -12,7 +12,7 @@ import api from './api.js';
 import './index.css';
 
 const App = () => {
-  const { activePanel, isInitializing, setConnected, retryCount } = useStore();
+  const { activePanel, setConnected } = useStore();
   const [isConfigured, setIsConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
 
@@ -25,21 +25,17 @@ const App = () => {
 
   useEffect(() => {
     const checkStatus = async () => {
-      const MAX_RETRIES = 5; // Reduced retries for faster boot, MainLayout handles persistent sync
-      let configured = true;
-      
       try {
         const statusRes = await api.get('/system/status');
-        configured = statusRes.data.configured ?? true;
+        const configured = statusRes.data.configured ?? true;
+        setIsConfigured(configured);
         setConnected(true);
       } catch {
         setConnected(false);
+        setIsConfigured(true); // Don't block on config check if offline
       }
-      
-      setIsConfigured(configured);
       setLoading(false);
     };
-
     checkStatus();
   }, [setConnected]);
 
@@ -74,7 +70,7 @@ const App = () => {
     );
   }
 
-  // Risk disclaimer
+  // Risk disclaimer — always shown first
   if (!disclaimerAccepted) {
     return (
       <RiskDisclaimer
@@ -84,12 +80,12 @@ const App = () => {
     );
   }
 
-  // Setup wizard
+  // Setup wizard — only if config is incomplete
   if (!isConfigured) {
     return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
-  // Dashboard - NO LOGIN REQUIRED
+  // Dashboard — No login required
   return (
     <MainLayout>
       {renderPanel()}

@@ -1,0 +1,104 @@
+# Walkthrough: Post-Refactoring Bug Fixes — KingIn Trading System
+**Date:** 2026-05-10 | **Session:** c911e2d6
+
+---
+
+## What Was Fixed
+
+### 🔴 Bug #1 — Engine Crash on Startup (NameError: `data`)
+**File:** `backend/Engine/modular_bootstrapper.py` line 190  
+**Fix:** Removed the orphaned `data["news_participate"] = ...` line that was incorrectly
+placed inside `build_pipeline()`. The variable `data` does not exist in that scope.
+The `news_participate` flag is already correctly read by `news_layer.py` directly from config.
+
+### 🔴 Bug #2 — Engine Crash on Every Trade Signal (NameError: `session`)
+**File:** `backend/Engine/trading_loop_controller.py` line 369  
+**Fix:** Replaced the bare `session` reference in `execute_signal()` with a locally
+created `aiohttp.ClientSession()` context manager. The session is owned by `run()`
+and was never passed as a parameter to `execute_signal()`.
+
+### 🔴 Bug #3 — Account Details Never Display / Login to Another Account Shows Nothing
+**Files:** `frontend/src/App.jsx`, `frontend/src/api.js`, `frontend/src/store/useStore.js`  
+**Fix (3 parts):**
+1. **Restored Login gate in `App.jsx`**: Dashboard is now gated behind `isAuthenticated`
+   state (derived from `localStorage.getItem('kingin_jwt')`). If no token → `Login.jsx` is shown.
+2. **Added `kingin:unauthorized` event system**: `api.js` interceptor dispatches a custom
+   DOM event on 401. `App.jsx` listens and sets `isAuthenticated = false`, showing login
+   without a full page reload.
+3. **Fixed `useStore.syncWithEngine()`**: A 401 response no longer flips `isApiReachable`
+   to `false`. Only genuine network failures do that. This stops the dashboard from
+   showing "Disconnected" when the backend is running but the token is missing/expired.
+
+### 🟠 Bug #4 — News Scalp Trades Stopped Out Immediately ($0.50 Hardcoded SL)
+**File:** `backend/Engine/trading_loop_controller.py` lines 523-535  
+**Fix:** Replaced hardcoded `price - 0.50` SL / `price + 1.00` TP with a call to
+`self._apply_dynamic_sl_tp()` using M5 candles. Tighter ATR multipliers are used
+for news scalps (1.0× SL, 1.5× TP) vs. standard signals (1.5× SL, 3.0× TP).
+Multipliers are temporarily swapped and then restored so standard signals are unaffected.
+
+### 🟠 Bug #5 — News Toggle Silently Fails in Production (Wrong URL Prefix)
+**File:** `frontend/src/api.js` line 55  
+**Fix:** Changed `'/config/news_toggle'` → `'/api/config/news_toggle'`. In Electron mode
+the `baseURL` is empty, so the full path must be explicit.
+
+### 🟡 Bug #6 — Deprecated `datetime.utcnow()` in JWT Module
+**File:** `backend/utils/jwt.py` line 17  
+**Fix:** Replaced `datetime.datetime.utcnow()` with `datetime.datetime.now(datetime.timezone.utc)`.
+Future-proof for Python 3.12+ which raises a `DeprecationWarning` on the old form.
+
+### 🟡 Bug #7 — `AlertCircle` Used But Not Imported in SetupWizard
+**File:** `frontend/src/SetupWizard.jsx` line 3  
+**Fix:** Added `AlertCircle` to the `lucide-react` import. Without this, any config save
+error triggered a `ReferenceError` crash that wiped the entire Setup Wizard.
+
+---
+
+## Auth Flow — How It Works Now
+
+```
+App boots
+  → Load disclaimer → Load Login screen (if no JWT in localStorage)
+    → User enters password → POST /api/login
+      → Backend validates against KINGIN_USER_PASSWORD in .env
+        → Returns JWT + controlToken
+          → Stored in localStorage as 'kingin_jwt' and 'kingin_ctrl'
+            → App renders Dashboard
+              → All /api/engine/* calls attach Bearer token automatically
+              
+Token expires / 401 received:
+  → api.js interceptor clears localStorage tokens
+  → Dispatches 'kingin:unauthorized' DOM event
+  → App.jsx listener sets isAuthenticated = false
+  → Login screen re-appears (no full page reload)
+
+Switching accounts:
+  → User goes to Settings → "Switch Account" (or System panel logout)
+  → handleLogout() clears tokens, sets isAuthenticated = false
+  → Login screen appears
+  → User logs in again
+  → Setup Wizard shown if config is incomplete
+```
+
+---
+
+## Files Changed
+
+| File | Bugs Fixed |
+|------|------------|
+| `backend/Engine/modular_bootstrapper.py` | #1 |
+| `backend/Engine/trading_loop_controller.py` | #2, #4 |
+| `backend/utils/jwt.py` | #6 |
+| `frontend/src/App.jsx` | #3 |
+| `frontend/src/api.js` | #3, #5 |
+| `frontend/src/store/useStore.js` | #8 |
+| `frontend/src/SetupWizard.jsx` | #7 |
+
+---
+
+## Verification Steps
+
+1. **Start the backend:** `python kingin_api.py` — should boot without errors
+2. **Open the frontend:** Login screen should appear (not dashboard directly)
+3. **Login with `kingin123`:** Dashboard should load and populate with live data
+4. **Switch account:** Go to Settings, clear credentials, re-run Setup Wizard
+5. **Check news toggle:** Toggle in SettingsPanel should persist across restarts

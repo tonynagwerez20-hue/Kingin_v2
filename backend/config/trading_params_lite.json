@@ -45,5 +45,6 @@
   "confluence": {
     "min_score": 5.0,
     "max_score": 7.0
-  }
+  },
+  "news_participate": true
 }

@@ -1,0 +1,315 @@
+# KingIn Trading System — Post-Refactoring Crash & Bug Analysis
+**Analyst:** Antigravity AI | **Date:** 2026-05-10 | **Session:** c911e2d6
+
+---
+
+## Executive Summary
+
+Yesterday's refactoring session introduced **5 critical bugs** that directly cause the engine
+to crash on startup and cause account details to not display after switching accounts.
+Additionally, **3 pre-existing structural issues** remain unresolved. This report documents
+every problem with its exact file location, root cause, and the fix required.
+
+---
+
+## 🔴 CRITICAL BUG #1 — Engine Crashes on Startup: Undefined Variable `data`
+
+**File:** `backend/Engine/modular_bootstrapper.py`  
+**Line:** `190`  
+**Severity:** 🔴 FATAL — Engine will not boot  
+
+### Root Cause
+During yesterday's refactoring, a code block was inserted into `build_pipeline()` that
+references a variable named `data` which **does not exist in that scope**:
+
+```python
+# Line 189-190 — modular_bootstrapper.py
+# Inject configuration context (e.g. news participation)
+data["news_participate"] = self.config.get("news_participate", True)  # ← CRASH: `data` is undefined
+```
+
+The variable `data` was clearly intended to be the `market_snapshot` dict used
+inside `run_main_loop()`, not in `build_pipeline()`. At the time this line runs
+during startup, there is no variable named `data` in scope. Python raises:
+```
+NameError: name 'data' is not defined
+```
+This crashes the entire engine process before the trading loop ever starts.
+
+### Fix Required
+**Delete lines 189–190 entirely.** The `news_participate` flag is already correctly
+propagated at the point of actual news layer invocation (in `news_layer.py`'s
+`_evaluate()` method which reads directly from config). This orphaned injection line
+is redundant and destructive.
+
+---
+
+## 🔴 CRITICAL BUG #2 — Engine Crashes Mid-Execution: `session` Not in Scope
+
+**File:** `backend/Engine/trading_loop_controller.py`  
+**Line:** `369`  
+**Severity:** 🔴 FATAL — Engine crashes on every trade signal  
+
+### Root Cause
+The `execute_signal()` method is `async` and is called from within the `run()` loop,
+which owns an `aiohttp.ClientSession` named `session`. However, `execute_signal()`
+does **not** accept `session` as a parameter, yet it tries to use it directly:
+
+```python
+# Inside execute_signal() — line 369
+m15_candles = await self.fetch_candle_data(session, "M15", 30)  # ← CRASH: `session` not a parameter
+```
+
+The `session` variable is a **local variable inside `run()`**. It is never passed
+to `execute_signal()`. Python raises:
+```
+NameError: name 'session' is not defined
+```
+This crash happens every time the engine attempts to enrich a signal with
+ATR-based SL/TP, which means **every attempted trade** crashes the engine.
+
+### Fix Required
+Either:
+1. Pass `session` as a parameter to `execute_signal()`, **or**
+2. Create a new session inside `execute_signal()` using `async with aiohttp.ClientSession() as session:`
+
+The cleanest fix is **option 2** — create a short-lived session inside the method
+for the single ATR candle fetch, so the method remains self-contained.
+
+---
+
+## 🔴 CRITICAL BUG #3 — Account Details Not Displaying After Switching Accounts
+
+**File:** `frontend/src/App.jsx` + `backend/kingin_api.py`  
+**Lines:** `App.jsx:92-97`, `kingin_api.py:240-252`  
+**Severity:** 🔴 CRITICAL — Data not shown after re-login / account switch  
+
+### Root Cause (Two-Part)
+
+#### Part A — No Login Screen in the App Flow
+`App.jsx` was refactored to **completely bypass the login screen**. The comment on
+line 92 explicitly says `// Dashboard - NO LOGIN REQUIRED`. The `Login.jsx` component
+exists and is fully functional, but it is **never rendered** by `App.jsx`:
+
+```jsx
+// App.jsx line 92-97 — Login.jsx is NEVER shown
+// Dashboard - NO LOGIN REQUIRED
+return (
+  <MainLayout>
+    {renderPanel()}
+  </MainLayout>
+);
+```
+
+Because login is skipped, `localStorage` never gets `kingin_jwt` or `kingin_ctrl` tokens set.
+This means every API call to `/api/engine/state` returns **HTTP 401 Unauthorized**
+(because auth was hardened yesterday). The `syncWithEngine()` action in `useStore.js`
+catches the 401 error and sets `isApiReachable: false`, so the dashboard shows all zeros.
+
+#### Part B — `GET /api/settings` is Unauthenticated
+The `GET /api/settings` and `POST /api/settings` endpoints have **no auth check**:
+
+```python
+# kingin_api.py line 240-252
+@app.get("/api/settings")
+async def get_settings(request: Request):
+    """Get system settings. Allow public access for setup wizard."""
+    # No _check_engine_auth() call here ← intentional but now misaligned
+```
+
+The Setup Wizard uses these endpoints to save new credentials. After saving, the
+app calls `onComplete()` which renders the dashboard — but still with no JWT token
+in `localStorage`. All subsequent protected calls (`/engine/state`, `/engine/start`,
+`/engine/stop`) fail with 401 and return no data.
+
+#### Part C — Account Info Reads Config, Not Session
+Even when auth works, `_build_engine_state()` in `kingin_api.py` reads account info
+from the config file (line 469-473), not from the live MT5 session:
+
+```python
+# kingin_api.py lines 469-473
+creds = cfg.get("pipeline", {}).get("data_provider", {}).get("config", {})
+state["account_id"] = creds.get("login", "N/A")   # Static from JSON
+state["account_server"] = creds.get("server", "N/A")  # Static from JSON
+```
+
+So if you switch accounts via the Setup Wizard and then check account details,
+it shows the **new config values** but the **balance/equity still shows zero**
+because the engine subprocess is not restarted and the DB still holds the old
+account's state (or nothing if the engine crashed from Bug #1).
+
+### Fix Required
+1. **Re-integrate `Login.jsx` into the `App.jsx` flow.** Check for `localStorage.getItem('kingin_jwt')` at startup; if missing, show the login screen.
+2. After successful login, store JWT + controlToken and proceed to the dashboard.
+3. Add a "Switch Account" option that clears localStorage tokens and re-shows the Setup Wizard (not the login form).
+
+---
+
+## 🟠 CRITICAL BUG #4 — News Scalp Path Still Uses Hardcoded $0.50 SL/TP
+
+**File:** `backend/Engine/trading_loop_controller.py`  
+**Lines:** `528–535`  
+**Severity:** 🟠 HIGH — News scalp trades will be stopped out immediately  
+
+### Root Cause
+The `execute_signal()` path was correctly refactored to use dynamic ATR-based SL/TP.
+However, the **`execute_news_scalp()` method was never updated**. It still uses
+hardcoded `$0.50` SL and `$1.00` TP values:
+
+```python
+# trading_loop_controller.py lines 528-532
+if trade_dict["action"] == "LONG":
+    trade_dict.setdefault("sl", price - 0.50)  # ← HARDCODED: too tight for XAUUSD
+    trade_dict.setdefault("tp", price + 1.00)
+elif trade_dict["action"] == "SHORT":
+    trade_dict.setdefault("sl", price + 0.50)  # ← HARDCODED: too tight for XAUUSD
+    trade_dict.setdefault("tp", price - 1.00)
+```
+
+XAUUSD daily ATR is typically $15–$25. A $0.50 SL will be triggered by normal
+spread/noise within 1-2 seconds of entry. Every news scalp trade will immediately stop out.
+
+### Fix Required
+Replace the hardcoded block with a call to `self._apply_dynamic_sl_tp(trade_dict, candles)`,
+using a short-term candle set (M5 or M1) appropriate for news scalp time horizon.
+
+---
+
+## 🟠 BUG #5 — `setNewsToggle` API URL is Missing the `/api/` Prefix
+
+**File:** `frontend/src/api.js`  
+**Line:** `55`  
+**Severity:** 🟠 MEDIUM — News toggle silently fails in Electron (packaged) mode  
+
+### Root Cause
+The `api.js` instance is configured with `baseURL: isElectron ? '' : '/api'`.
+In browser/dev mode the baseURL handles the prefix. But the `setNewsToggle` function
+calls a path that is missing the standard prefix:
+
+```javascript
+// api.js line 55
+export const setNewsToggle = (participate) => api.post('/config/news_toggle', { participate });
+```
+
+In dev mode this resolves correctly to `/api/config/news_toggle` (via Vite proxy).
+In Electron mode, `baseURL` is `''` so the call hits `http://127.0.0.1:8088/config/news_toggle`,
+but the actual endpoint is registered as `/api/config/news_toggle` in FastAPI.
+FastAPI returns a `404 Not Found` and the news toggle silently fails.
+
+### Fix Required
+Change the path to include the prefix consistently:
+```javascript
+export const setNewsToggle = (participate) => api.post('/api/config/news_toggle', { participate });
+```
+Or strip the `baseURL` prefix logic from the Electron path and always use full paths.
+
+---
+
+## 🟡 STRUCTURAL ISSUE #6 — `utils/jwt.py` Uses Deprecated `datetime.utcnow()`
+
+**File:** `backend/utils/jwt.py`  
+**Line:** `17`  
+**Severity:** 🟡 LOW (warning, not a crash yet)  
+
+### Root Cause
+```python
+now = datetime.datetime.utcnow()  # Deprecated in Python 3.12+
+```
+Python 3.12+ deprecates `utcnow()`. This will eventually break JWT issuance.
+
+### Fix Required
+```python
+now = datetime.datetime.now(datetime.timezone.utc)
+```
+
+---
+
+## 🟡 STRUCTURAL ISSUE #7 — SetupWizard References Undefined `AlertCircle`
+
+**File:** `frontend/src/SetupWizard.jsx`  
+**Line:** `141`  
+**Severity:** 🟡 MEDIUM — Setup Wizard crashes with a React error if any config save fails  
+
+### Root Cause
+The component renders `<AlertCircle>` in the error state, but `AlertCircle` is never
+imported from `lucide-react`:
+
+```jsx
+// SetupWizard.jsx line 3 — AlertCircle is NOT imported
+import { Shield, Key, Server, Target, Zap, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+
+// ...but used on line 141
+<AlertCircle size={14} />  // ← ReferenceError: AlertCircle is not defined
+```
+
+If the user hits an error during "FINISH & LAUNCH" (e.g. backend is offline),
+the error state is rendered and React throws a ReferenceError, crashing the
+entire Setup Wizard and forcing a full page reload.
+
+### Fix Required
+Add `AlertCircle` to the import statement.
+
+---
+
+## 🟡 STRUCTURAL ISSUE #8 — `useStore.syncWithEngine` Has No Auth Token on First Load
+
+**File:** `frontend/src/store/useStore.js`  
+**Line:** `52`  
+**Severity:** 🟡 MEDIUM — Dashboard always shows disconnected on first load  
+
+### Root Cause
+`App.jsx` calls `setConnected(true)` after hitting the **public** `/api/system/status`
+endpoint, but then `MainLayout` (presumably) calls `syncWithEngine()` which hits the
+**protected** `/api/engine/state` endpoint. Since no JWT token is stored (login is
+bypassed), every call to `syncWithEngine()` will return 401 and set:
+```javascript
+set({ isApiReachable: false, isEngineRunning: false });
+```
+This overrides the `isApiReachable: true` set by the status check. Result: the
+dashboard permanently shows "Disconnected" even when the backend is fully operational.
+
+### Fix Required
+`syncWithEngine()` must handle 401 separately from a true network failure:
+- **401** = auth issue → clear tokens, redirect to login
+- **Network error** = backend offline → show disconnected
+
+---
+
+## 📊 Full Issue Register
+
+| # | Severity | File | Line | Issue | Impact |
+|---|----------|------|------|-------|--------|
+| 1 | 🔴 FATAL | `modular_bootstrapper.py` | 190 | `NameError: data is not defined` in `build_pipeline()` | Engine crashes on every startup |
+| 2 | 🔴 FATAL | `trading_loop_controller.py` | 369 | `NameError: session is not defined` in `execute_signal()` | Engine crashes on every trade signal |
+| 3 | 🔴 CRITICAL | `App.jsx` + `kingin_api.py` | 92, 469 | Login bypassed; JWT never set; all protected endpoints return 401 | Account details never display; dashboard shows all zeros |
+| 4 | 🟠 HIGH | `trading_loop_controller.py` | 528-535 | News scalp SL/TP still hardcoded at $0.50 | News scalp trades stop out immediately |
+| 5 | 🟠 MEDIUM | `api.js` | 55 | News toggle URL missing `/api/` prefix in Electron mode | News toggle silently fails in production build |
+| 6 | 🟡 LOW | `utils/jwt.py` | 17 | Deprecated `datetime.utcnow()` | Will break in Python 3.12+ |
+| 7 | 🟡 MEDIUM | `SetupWizard.jsx` | 141 | `AlertCircle` used but not imported | Setup Wizard crashes on config save error |
+| 8 | 🟡 MEDIUM | `useStore.js` | 52 | `syncWithEngine` 401 treated as network failure | Dashboard shows Disconnected even when backend is running |
+
+---
+
+## 🔧 Fix Priority Order
+
+1. **Fix #1 first** — Delete the `data["news_participate"]` line in `build_pipeline()`. Without this, nothing works.
+2. **Fix #2 second** — Add a local `aiohttp.ClientSession` inside `execute_signal()` for ATR candle fetch.
+3. **Fix #3 third** — Restore login flow in `App.jsx`. Gate the dashboard behind a JWT check.
+4. **Fix #4 fourth** — Apply dynamic ATR SL/TP to the news scalp path.
+5. **Fix #5 fifth** — Correct the `setNewsToggle` API path prefix.
+6. **Fix #6–#8** — Minor hardening.
+
+---
+
+## Root Cause Summary: What the Refactoring Did
+
+Yesterday's session made these changes that caused regressions:
+
+| Change Made | Intended Effect | Actual Side Effect |
+|---|---|---|
+| Added `data["news_participate"] = ...` to `build_pipeline()` | Pass news flag into market snapshot | `data` doesn't exist in that scope → `NameError` on startup |
+| Added `m15_candles = await self.fetch_candle_data(session, ...)` inside `execute_signal()` | Dynamic ATR-based SL/TP | `session` is not a parameter of `execute_signal()` → `NameError` on trade |
+| Removed login gate from `App.jsx` | Faster access for local dev | JWT never set → all protected endpoints return 401 → no data |
+| Did not update `execute_news_scalp()` SL/TP | (Oversight) | News scalp path still has hardcoded $0.50 SL |
+| Added `setNewsToggle` path without `/api/` prefix check | Config toggle from dashboard | Broken in Electron/production mode |
+

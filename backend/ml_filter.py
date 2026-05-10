@@ -50,11 +50,31 @@ def engineer_features(signal: dict) -> dict:
 
 
 def load_model() -> dict:
-    """Load trained model from JSON file."""
-    if os.path.exists(MODEL_PATH):
+    """Load trained model from JSON file with safety guards."""
+    if not os.path.exists(MODEL_PATH):
+        # Create a dummy default model structure if missing to prevent pipeline crashes
+        log.warning(f"ML Model file NOT FOUND at {MODEL_PATH}. Using default conservative weights.")
+        return {
+            "model_type": "default_conservative",
+            "threshold": 0.65,
+            "weights": {
+                "ob_strength": 0.2,
+                "fvg_present": 0.2,
+                "bos_aligned": 0.2,
+                "liquidity_swept": 0.3,
+                "adr_pct": -0.1,
+                "pips_to_liquidity": 0.1,
+                "session": 0.05,
+                "htf_bias": 0.05
+            }
+        }
+    
+    try:
         with open(MODEL_PATH) as f:
             return json.load(f)
-    return None
+    except Exception as e:
+        log.error(f"Failed to parse ML model file: {e}")
+        return None
 
 
 def score_signal(features: dict) -> float:

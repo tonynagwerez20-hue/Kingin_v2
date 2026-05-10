@@ -162,6 +162,16 @@ class ZMQBridge:
     def is_ready(self) -> bool:
         return self._pub_ok
 
+    @property
+    def is_connected(self) -> bool:
+        """Check if the PUB socket is ready and bound."""
+        return self._pub_ok
+
+    @property
+    def connected(self) -> bool:
+        """Alias for compatibility with legacy trading loop controllers."""
+        return self._pub_ok
+
     def send_signal(self, signal: Dict[str, Any]) -> bool:
         """
         Publish enriched signal dict to HedgeEA via ZMQ PUB socket.

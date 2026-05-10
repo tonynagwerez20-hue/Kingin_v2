@@ -26,30 +26,16 @@ if (isElectron) {
 }
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('kingin_jwt');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-
-  // Control token is stored after login — never hard-coded in the bundle.
-  const ctrl = localStorage.getItem('kingin_ctrl');
-  if (ctrl) config.headers['X-Control-Token'] = ctrl;
-
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('kingin_jwt');
-      localStorage.removeItem('kingin_ctrl');
-      // Force reload to show login screen if required, 
-      // but in this version we often bypass login for local ease.
-      if (window.location.pathname !== '/login') {
-         // window.location.reload(); 
-      }
-    }
     return Promise.reject(error);
   }
 );
+
+export const setNewsToggle = (participate) => api.post('/api/config/news_toggle', { participate });
 
 export default api;

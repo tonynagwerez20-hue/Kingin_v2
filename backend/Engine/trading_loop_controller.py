@@ -42,6 +42,10 @@ class TradingLoopController:
         self.db               = db
         self.backtest_mode    = backtest_mode
 
+        # ATR multiplier defaults (can be overridden by config)
+        self.sl_atr_mult = 1.5
+        self.tp_atr_mult = 3.0
+
         # Shared account state dict injected from the bootstrapper so the
         # controller always has live equity/balance for risk injection.
         # Falls back to an internal dict if not provided.
@@ -139,6 +143,46 @@ class TradingLoopController:
         })
         return signal
 
+    def _calculate_atr(self, candles: list, period: int = 14) -> float:
+        """Simple ATR calculation from candle list."""
+        if len(candles) < period + 1:
+            return 0.0
+        
+        trs = []
+        for i in range(1, len(candles)):
+            high = candles[i].get("high", 0)
+            low = candles[i].get("low", 0)
+            prev_close = candles[i-1].get("close", 0)
+            
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            trs.append(tr)
+            
+        # Return simple moving average of TR
+        relevant_trs = trs[-period:]
+        return sum(relevant_trs) / len(relevant_trs)
+
+    def _apply_dynamic_sl_tp(self, signal_dict: Dict, candles: list):
+        """Calculate and set SL/TP based on ATR."""
+        price = signal_dict.get("price", 0.0)
+        if price <= 0 or not candles:
+            signal_dict.setdefault("sl", 0.0)
+            signal_dict.setdefault("tp", 0.0)
+            return
+
+        atr = self._calculate_atr(candles)
+        # Gold price is ~2300, ATR might be ~2.0 (20 pips). 
+        # If ATR fails, fall back to a sensible minimum for gold (e.g. 1.0 = 10 pips)
+        if atr <= 0:
+            atr = 1.0 
+
+        action = signal_dict.get("action")
+        if action == "LONG":
+            signal_dict.setdefault("sl", price - (atr * self.sl_atr_mult))
+            signal_dict.setdefault("tp", price + (atr * self.tp_atr_mult))
+        elif action == "SHORT":
+            signal_dict.setdefault("sl", price + (atr * self.sl_atr_mult))
+            signal_dict.setdefault("tp", price - (atr * self.tp_atr_mult))
+
     def _check_cro(self, tick: Dict) -> bool:
         """
         FIX #1 + #2: Call the correct method name and convert spread units.
@@ -179,9 +223,10 @@ class TradingLoopController:
         filtration_result = None
         if self.filtration:
             try:
-                filtration_result = self.filtration.process_all_layers(market_snapshot)
+                filtration_result = self.filtration.process(market_snapshot)
             except Exception as e:
                 print(f"[TradingLoop] Filtration error: {e}")
+                filtration_result = {}
 
         # Extract HTF bias and news scalp from layer results
         htf_bias          = "neutral"
@@ -320,19 +365,15 @@ class TradingLoopController:
         else:
             signal_dict.setdefault("price", 0.0)
 
-        # Calculate SL/TP based on signal and risk parameters (using ATR or fixed pips)
-        # For now, using fixed values - in production these should come from strategy/risk
-        price = signal_dict.get("price", 0.0)
-        if price > 0:
-            if signal_dict["action"] == "LONG":
-                signal_dict.setdefault("sl", price - 0.50)  # $0.50 SL for gold
-                signal_dict.setdefault("tp", price + 1.00)  # $1.00 TP for gold
-            elif signal_dict["action"] == "SHORT":
-                signal_dict.setdefault("sl", price + 0.50)  # $0.50 SL for gold
-                signal_dict.setdefault("tp", price - 1.00)  # $1.00 TP for gold
-        else:
-            signal_dict.setdefault("sl", 0.0)
-            signal_dict.setdefault("tp", 0.0)
+        # Calculate SL/TP based on signal and risk parameters (using dynamic ATR)
+        # Using M15 candles for ATR as a balanced timeframe for Gold
+        # Create a local session for the candle fetch since we may not have one in scope
+        try:
+            async with aiohttp.ClientSession() as _atr_session:
+                m15_candles = await self.fetch_candle_data(_atr_session, "M15", 30)
+        except Exception:
+            m15_candles = []
+        self._apply_dynamic_sl_tp(signal_dict, m15_candles)
 
         # Apply risk management for position sizing (get enforced lot size)
         if hasattr(self, 'risk_manager') and self.risk_manager:
@@ -485,19 +526,18 @@ class TradingLoopController:
         else:
             trade_dict.setdefault("price", 0.0)
 
-        # Calculate SL/TP based on signal and risk parameters (using ATR or fixed pips)
-        # For now, using fixed values - in production these should come from strategy/risk
-        price = trade_dict.get("price", 0.0)
-        if price > 0:
-            if trade_dict["action"] == "LONG":
-                trade_dict.setdefault("sl", price - 0.50)  # $0.50 SL for gold
-                trade_dict.setdefault("tp", price + 1.00)  # $1.00 TP for gold
-            elif trade_dict["action"] == "SHORT":
-                trade_dict.setdefault("sl", price + 0.50)  # $0.50 SL for gold
-                trade_dict.setdefault("tp", price - 1.00)  # $1.00 TP for gold
-        else:
-            trade_dict.setdefault("sl", 0.0)
-            trade_dict.setdefault("tp", 0.0)
+        # Calculate dynamic ATR-based SL/TP for news scalp
+        # Use M5 candles for tighter, faster news scalp time horizon
+        try:
+            async with aiohttp.ClientSession() as _atr_session:
+                m5_candles = await self.fetch_candle_data(_atr_session, "M5", 20)
+        except Exception:
+            m5_candles = []
+        # Use tighter ATR multipliers for news scalp (faster exit)
+        orig_sl_mult, orig_tp_mult = self.sl_atr_mult, self.tp_atr_mult
+        self.sl_atr_mult, self.tp_atr_mult = 1.0, 1.5  # tighter for news scalp
+        self._apply_dynamic_sl_tp(trade_dict, m5_candles)
+        self.sl_atr_mult, self.tp_atr_mult = orig_sl_mult, orig_tp_mult  # restore
 
         # Apply risk management for position sizing (get enforced lot size)
         if hasattr(self, 'risk_manager') and self.risk_manager:

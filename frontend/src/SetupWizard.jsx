@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Key, Server, Target, Zap, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Shield, Key, Server, Target, Zap, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import api from './api';
 
 const SetupField = ({ label, icon: Icon, type = "text", value, onChange, placeholder }) => (

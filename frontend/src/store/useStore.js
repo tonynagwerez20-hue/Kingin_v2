@@ -12,6 +12,7 @@ const useStore = create((set, get) => ({
   isInitializing: true,
   engineUptimeSeconds: 0,
   retryCount: 0,
+  newsParticipate: false,
 
   // --- ACCOUNT STATE ---
   account: {
@@ -93,9 +94,11 @@ const useStore = create((set, get) => ({
           signals: currentSignal.length > 0 ? currentSignal : state.signals,
           layers: Array.isArray(data.layers) ? data.layers : state.layers || [],
           logs: backendLogs.length > 0 ? backendLogs : state.logs,
+          newsParticipate: !!data.news_participate,
         };
       });
     } catch (err) {
+      // Genuine network failure — backend is offline
       set({ isApiReachable: false, isEngineRunning: false });
     }
   },

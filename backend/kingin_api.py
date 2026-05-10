@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv()
 
+from config_loader import load_trading_params, save_trading_params
+
 import sqlite3
 import subprocess
 import sys
@@ -97,46 +99,26 @@ async def get_system_status():
 _engine_process: Optional[subprocess.Popen] = None
 _engine_start_time: Optional[float] = None
 
-from utils.jwt import create_token, decode_token
+# Authentication removed as per request.
 
-def _check_token(request: Request) -> bool:
-    """JWT Token check for standard API routes."""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        return False
-    token = auth_header.split(" ", 1)[1]
-    payload = decode_token(token)
-    return bool(payload)
 
-def _check_control_token(request: Request) -> bool:
-    """X-Control-Token check for engine management routes."""
-    provided = request.headers.get("X-Control-Token", "")
-    return provided == _CONTROL_TOKEN
-
-def _check_engine_auth(request: Request) -> bool:
-    """Accept either a valid JWT OR the control token for engine endpoints."""
-    # For local desktop app simplicity, we'll allow engine status checks
-    return True
-
-@app.post("/api/login")
-async def login(request: Request):
-    """Simple JWT login against environment password."""
+@app.post("/api/config/news_toggle")
+async def set_news_toggle(request: Request):
+    """Enable or disable news event participation."""
+    
     try:
         body = await request.json()
-        password = body.get("password")
-        env_password = os.getenv("KINGIN_USER_PASSWORD")
-
-        if env_password and password == env_password:
-            token = create_token("admin")
-            return JSONResponse({
-                "success": True,
-                "token": token,
-                "controlToken": _CONTROL_TOKEN,
-            })
+        participate = body.get("participate", True)
+        
+        params = load_trading_params()
+        params["news_participate"] = participate
+        
+        if save_trading_params(params):
+            return {"success": True, "participate": participate}
         else:
-            return JSONResponse({"success": False, "error": "Invalid password"}, status_code=401)
+            return JSONResponse({"error": "Failed to save configuration"}, status_code=500)
     except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=400)
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 def _get_db_path() -> Path:
     return PROJECT_ROOT / "data" / "hedge.db"
@@ -459,8 +441,6 @@ def _build_engine_state() -> dict:
 
 @app.get("/api/engine/state")
 async def engine_state(request: Request):
-    if not _check_engine_auth(request):
-        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     state = _build_engine_state()
     return JSONResponse(state)
 
@@ -486,8 +466,6 @@ _engine_log_handle = None
 
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
-    if not _check_engine_auth(request):
-        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=401)
     global _engine_process, _engine_start_time, _engine_log_handle
 
     if _is_engine_running():
@@ -531,8 +509,6 @@ async def engine_start(request: Request):
 
 @app.post("/api/engine/stop")
 async def engine_stop(request: Request):
-    if not _check_engine_auth(request):
-        return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=403)
     global _engine_process, _engine_log_handle
 
     if not _is_engine_running():
