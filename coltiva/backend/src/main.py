@@ -26,6 +26,13 @@ _root = _current.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
+# Load .env file if exists
+from dotenv import load_dotenv
+env_path = _current.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    logging.info(f"Loaded environment from {env_path}")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
