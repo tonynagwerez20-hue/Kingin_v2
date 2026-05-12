@@ -102,6 +102,36 @@ async def get_crop_detail(crop: str) -> dict:
     }
 
 
+@router.get("/crops/{crop}/micro-dose", response_model=MicroDoseInfo)
+async def get_micro_dose(crop: str) -> MicroDoseInfo:
+    """Get micro-dose fertiliser information for a crop.
+    
+    Args:
+        crop: Crop name
+        
+    Returns:
+        Micro-dose information
+    """
+    # Validate crop
+    if crop not in get_crop_names():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Crop '{crop}' not found"
+        )
+    
+    # Get micro-dose info
+    info = get_micro_dose_info(crop)
+    
+    return MicroDoseInfo(
+        crop=crop,
+        method=info.get("method", ""),
+        cost_per_acre=info.get("cost_per_acre", ""),
+        yield_increase=info.get("yield_increase", ""),
+        roi_message=info.get("roi_message", ""),
+        warning=info.get("warning")
+    )
+
+
 @router.get("/crops/{crop}/{topic}", response_model=TopicData)
 async def get_crop_topic(crop: str, topic: str) -> TopicData:
     """Get specific topic data for a crop.
