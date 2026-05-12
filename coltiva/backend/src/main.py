@@ -29,13 +29,17 @@ if str(_root) not in sys.path:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import with package prefix
+# Import with package prefix - using relative imports for clarity
 try:
     from src.api import chat, crops
     from src.core.knowledge_base import get_crop_names
 except ImportError:
-    from api import chat, crops
-    from core.knowledge_base import get_crop_names
+    # Fallback to absolute from project root
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from src.api import chat, crops
+    from src.core.knowledge_base import get_crop_names
 
 # Configure logging
 logging.basicConfig(
