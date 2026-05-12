@@ -1,0 +1,10 @@
+{
+    "global_kill_switch": false,
+    "current_regime": "VOLATILE",
+    "last_audit_status": "PASS",
+    "active_risk_vetos": [],
+    "daily_loss": 0.0,
+    "daily_trades": 0,
+    "last_reset_date": "2026-05-12",
+    "concurrent_positions": 0
+}
