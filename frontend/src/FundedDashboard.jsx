@@ -27,8 +27,7 @@ const AccountLogin = ({ onLogin }) => {
     
     try {
       await api.post('/settings', {
-        pipeline: { data_provider: { config: config.broker } },
-        trading: { account_balance: config.account.balance }
+        pipeline: { data_provider: { config: config.broker } }
       });
       onLogin(config);
     } catch (err) {
@@ -95,7 +94,7 @@ const AccountLogin = ({ onLogin }) => {
 const TradingPage = ({ account, onLogout, online, state }) => {
   const [loading, setLoading] = useState(false);
   
-  const balance = account?.account?.balance || 0;
+  const balance = state?.account_balance || 0;
   const equity = state?.account_equity || balance || 0;
   const pnl = state?.floating_pnl || 0;
   const positions = state?.positions || [];
