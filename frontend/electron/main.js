@@ -224,8 +224,8 @@ app.whenReady().then(async () => {
     );
 
     const options = {
-      hostname: '127.0.0.1', port: 8088,
-      path: reqUrl.startsWith('/api/') ? reqUrl : `/api${reqUrl.startsWith('/') ? reqUrl : '/' + reqUrl}`,
+      hostname: '127.0.0.1', port: 8000,
+      path: reqUrl.startsWith('/') ? reqUrl : '/' + reqUrl,
       method: method.toUpperCase(),
       headers: {
         'Content-Type': 'application/json',
@@ -242,11 +242,13 @@ app.whenReady().then(async () => {
     mainWindow.loadURL('app://kingin/');
   }
 
-  // Auto-start backend in production mode AFTER showing the window
-  if (app.isPackaged) {
+  // Auto-start backend in production or dev mode AFTER showing the window
+  // In dev mode we start on first load; in prod it's already started
+  if (!app.isPackaged) {
+    // Dev mode - check if backend running, start if not
     startPython();
-    logToDisk('[MAIN] Backend start initiated in background.');
-    // We don't await waitForBackend here to avoid blocking the UI
+  } else {
+    startPython();
     waitForBackend().then(() => {
       logToDisk('[MAIN] Backend confirmed ready.');
     });
