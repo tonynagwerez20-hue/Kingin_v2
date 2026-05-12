@@ -1,95 +1,70 @@
 import React, { useState, useEffect } from 'react';
-import MainLayout from './components/MainLayout';
-import Overview from './components/panels/Overview';
-import TradingPanel from './components/panels/TradingPanel';
-import PortfolioPanel from './components/panels/PortfolioPanel';
-import SystemPanel from './components/panels/SystemPanel';
-import SettingsPanel from './components/panels/SettingsPanel';
-import RiskDisclaimer from './RiskDisclaimer.jsx';
-import SetupWizard from './SetupWizard.jsx';
-import useStore from './store/useStore';
+import FundedDashboard from './FundedDashboard.jsx';
 import api from './api.js';
 import './index.css';
 
 const App = () => {
-  const { activePanel, setConnected } = useStore();
-  const [isConfigured, setIsConfigured] = useState(true);
+  const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Check if disclaimer was accepted
-  const [disclaimerAccepted, setDisclaimerAccepted] = useState(() => {
-    const ts = localStorage.getItem('kingin_disclaimer_ts');
-    if (!ts) return false;
-    return (Date.now() - parseInt(ts)) < 30 * 24 * 3600 * 1000;
-  });
-
+  // Check connection
   useEffect(() => {
-    const checkStatus = async () => {
+    const check = async () => {
       try {
-        const statusRes = await api.get('/system/status');
-        const configured = statusRes.data.configured ?? true;
-        setIsConfigured(configured);
+        await api.get('/system/status');
         setConnected(true);
       } catch {
         setConnected(false);
-        setIsConfigured(true); // Don't block on config check if offline
       }
       setLoading(false);
     };
-    checkStatus();
-  }, [setConnected]);
+    check();
+  }, []);
 
-  const handleSetupComplete = () => setIsConfigured(true);
-  const handleDisclaimerAccept = () => {
-    localStorage.setItem('kingin_disclaimer_ts', Date.now().toString());
-    setDisclaimerAccepted(true);
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.reload();
   };
 
-  const renderPanel = () => {
-    switch (activePanel) {
-      case 'overview': return <Overview />;
-      case 'trading': return <TradingPanel />;
-      case 'portfolio': return <PortfolioPanel />;
-      case 'system': return <SystemPanel />;
-      case 'intelligence': return <Overview />; // Placeholder
-      case 'settings': return <SettingsPanel />;
-      default: return <Overview />;
-    }
-  };
-
-  // Loading state
+  // Loading
   if (loading) {
     return (
-      <div className="h-screen bg-kg-dark flex flex-col items-center justify-center gap-6 font-mono">
-        <div className="w-16 h-16 border-4 border-kg-gold/20 border-t-kg-gold rounded-full animate-spin" />
-        <div className="text-center">
-          <div className="text-lg font-bold text-kg-gold tracking-[0.3em]">KINGIN SYSTEM</div>
-          <div className="text-[10px] text-kg-muted mt-2 uppercase tracking-widest">Initializing Secure Environment...</div>
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        background: '#0b0d10',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '24px'
+      }}>
+        <div style={{
+          width: '48px',
+          height: '48px',
+          border: '3px solid rgba(234, 179, 8, 0.2)',
+          borderTopColor: '#eab308',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '18px', fontWeight: '700', color: '#eab308', letterSpacing: '0.3em' }}>KINGIN</div>
+          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Initializing...</div>
         </div>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
 
-  // Risk disclaimer — always shown first
-  if (!disclaimerAccepted) {
-    return (
-      <RiskDisclaimer
-        onAccept={handleDisclaimerAccept}
-        onDecline={() => window.close()}
-      />
-    );
-  }
-
-  // Setup wizard — only if config is incomplete
-  if (!isConfigured) {
-    return <SetupWizard onComplete={handleSetupComplete} />;
-  }
-
-  // Dashboard — No login required
   return (
-    <MainLayout>
-      {renderPanel()}
-    </MainLayout>
+    <FundedDashboard 
+      sessionToken="demo" 
+      onLogout={handleLogout} 
+    />
   );
 };
 

@@ -267,12 +267,12 @@ class SystemBootstrapper:
                             pass
                     
                     # Check buffer counts
-                    async with session.get(f"{api_url}/ohlc") as ohlc_resp:
+                    async with session.get(f"{api_url}/buffer_status") as ohlc_resp:
                         if ohlc_resp.status == 200:
                             ohlc_data = await ohlc_resp.json()
-                            h1_count = len(ohlc_data.get("H1", []))
-                            m15_count = len(ohlc_data.get("M15", []))
-                            m5_count = len(ohlc_data.get("M5", []))
+                            h1_count = ohlc_data.get("H1", 0)
+                            m15_count = ohlc_data.get("M15", 0)
+                            m5_count = ohlc_data.get("M5", 0)
                             
                             if h1_count > 0 and m15_count > 0 and m5_count > 0:
                                 print(f"[OK] [Warmup] Buffers ready: H1={h1_count}, M15={m15_count}, M5={m5_count}")

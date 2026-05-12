@@ -114,6 +114,22 @@ async def lifespan(app: FastAPI):
 
     mode = get_env("DATA_SOURCE_TYPE", default_mode)
     
+    # AUTO mode: auto-detect best provider based on platform
+    if mode == "AUTO":
+        import sys
+        import os
+        if sys.platform.startswith('win') or os.name == 'nt':
+            # Try MT5 on Windows
+            try:
+                import MetaTrader5 as mt5
+                mode = "MT5"
+            except ImportError:
+                mode = "YAHOO"
+        else:
+            # Use Yahoo Finance on non-Windows
+            mode = "YAHOO"
+        print(f"[Server] AUTO mode detected: using {mode}")
+    
     if mode == "MT5":
         print(f"[Server] Starting in MT5 Polling Mode (Symbol: {symbol})")
         from data_feed.mt5_provider import MT5DataProvider
@@ -170,6 +186,52 @@ async def lifespan(app: FastAPI):
             print("[Server] ERROR: Failed to connect to MT5. Check credentials and ensure MT5 is running.")
             yield
 
+    elif mode == "YAHOO":
+        # Web-based Yahoo Finance provider (works on Linux/non-Windows)
+        print("[Server] Starting in Yahoo Finance Mode (Web)")
+        from data_feed.yahoo_provider import YahooFinanceProvider
+        
+        provider = YahooFinanceProvider()
+        if provider.connect():
+            async def yahoo_poller():
+                print("[Server] Yahoo Finance Poller Started")
+                while True:
+                    try:
+                        # Poll M5, M15, H1
+                        for tf in ["M5", "M15", "H1"]:
+                            candles = provider.get_latest_candles("GC=F", tf, 20)
+                            if candles:
+                                if tf in ohlc_buffers:
+                                    # Atomic replace for smooth API results
+                                    for c in candles:
+                                        # Simple deduplication based on time
+                                        existing_times = [x.get("time") for x in ohlc_buffers[tf]]
+                                        if c["time"] not in existing_times:
+                                             ohlc_buffers[tf].append(c)
+                                             
+                                # Update latest tick if M5
+                                if tf == "M5" and candles:
+                                    last = candles[-1]
+                                    latest_tick["price"] = last["close"]
+                                    latest_tick["bid"] = last["close"] - 0.1 # Mocked spread
+                                    latest_tick["ask"] = last["close"] + 0.1
+                                    latest_tick["timestamp"] = time.time()
+                                    latest_tick["spread"] = 0.2
+                                    latest_tick["volume"] = last.get("volume", 0)
+                                    
+                        await asyncio.sleep(5) # Poll every 5s
+                    except Exception as e:
+                        import traceback
+                        print(f"[Server] Yahoo Polling Exception: {e}")
+                        traceback.print_exc()
+                        await asyncio.sleep(10)
+            
+            poller_task = asyncio.create_task(yahoo_poller())
+            yield
+            poller_task.cancel()
+        else:
+            print("[Server] ERROR: Failed to connect to Yahoo Finance.")
+            yield
     elif mode == "CSV" and CSVBatchProcessor:
         print("[Server] Starting in CSV Mode (Multi-File)")
         
@@ -317,7 +379,7 @@ app = FastAPI(lifespan=lifespan)
 # Add CORS middleware to allow React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev server
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -430,8 +492,20 @@ async def http_ohlc(request: Request):
     # print(f"[API] GET /ohlc?tf={tf}&limit={limit}&symbol={symbol}")
     data = _candles_from_memory(tf, limit, symbol)
     return JSONResponse({"timeframe": tf, "symbol": symbol, "candles": data})
+@app.get("/buffer_status")
+async def http_buffer_status():
+    """Returns buffer counts in format expected by bootstrapper warmup."""
+    # Return buffer counts for each timeframe
+    h1_count = len(list(ohlc_buffers.get("H1", [])))
+    m15_count = len(list(ohlc_buffers.get("M15", [])))
+    m5_count = len(list(ohlc_buffers.get("M5", [])))
+    return JSONResponse({
+        "H1": h1_count,
+        "M15": m15_count,
+        "M5": m5_count
+    })
 
-
+@app.get("/ohlc")
 @app.get("/delta")
 async def http_delta(request: Request):
     tf = request.query_params.get("tf", "M5")
@@ -1011,6 +1085,75 @@ async def run_backtest_endpoint(request: Request):
         return JSONResponse({"status": "SUCCESS", "message": "Backtest initiated in background."})
     except Exception as e:
         return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
+
+
+@app.get("/engine_state")
+async def get_engine_state():
+    """
+    Returns dashboard-compatible engine state for real-time display.
+    Combines buffer data with server status for frontend consumption.
+    """
+    try:
+        # Get latest price
+        h1_candles = ohlc_buffers.get("H1", [])
+        m15_candles = ohlc_buffers.get("M15", [])
+        m5_candles = ohlc_buffers.get("M5", [])
+        
+        # Calculate bias from H1 trend
+        bias = "NEUTRAL"
+        if len(h1_candles) >= 2:
+            last_h1 = h1_candles[-1]
+            prev_h1 = h1_candles[-2]
+            if last_h1.get("close", 0) > prev_h1.get("close", 0):
+                bias = "BULLISH"
+            elif last_h1.get("close", 0) < prev_h1.get("close", 0):
+                bias = "BEARISH"
+        
+        # Current price from M5
+        current_price = 0
+        if m5_candles:
+            current_price = m5_candles[-1].get("close", 0)
+        
+        # Get buffer counts
+        buffer_status = {}
+        for tf in ["H1", "M15", "M5"]:
+            buffer_status[tf] = len(ohlc_buffers.get(tf, []))
+        
+        # Build engine state response
+        state = {
+            "timestamp": int(time.time()),
+            "symbol": "XAUUSD",
+            "bias": bias,
+            "current_price": current_price,
+            "signal_action": "WAIT",
+            "entry_price": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "lot_size": 0.01,
+            "execution_type": "AUTO",
+            "confluence_score": 0,
+            "killzone": "ASIAN",
+            "session_time": "NEW_YORK",
+            "rr_ratio": 0,
+            "layers": [
+                {"name": "H1 Trend", "passed": bias != "NEUTRAL", "score": 80 if bias != "NEUTRAL" else 0, "reason": "H1 trend aligned" if bias != "NEUTRAL" else "No clear trend"},
+                {"name": "M15 Zone", "passed": False, "score": 0, "reason": "No supply/demand setup"},
+                {"name": "M5 Trigger", "passed": False, "score": 0, "reason": "Waiting for signal"}
+            ],
+            "last_trade": None,
+            "account_equity": 10000.0,
+            "account_balance": 10000.0,
+            "floating_pnl": 0.0,
+            "open_trades_count": 0,
+            "positions": [],
+            "warnings": [],
+            "pipeline_log": [f"Server running in {get_env('DATA_SOURCE_TYPE', 'AUTO')} mode"],
+            "buffers": buffer_status
+        }
+        
+        return JSONResponse(state)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.websocket("/ws")

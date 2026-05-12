@@ -5,6 +5,17 @@ class StrategyManager:
     def __init__(self, strategies: List[AbstractStrategy]):
         self.strategies = strategies
 
+    def generate_signal(self, market_snapshot: Dict) -> Optional[Dict]:
+        """
+        Interface method called by trading_loop_controller.
+        Wraps aggregate_signals with data from market_snapshot.
+        """
+        htf_buffer = market_snapshot.get("htf_buffer", [])
+        mtf_buffer = market_snapshot.get("mtf_buffer", [])
+        ltf_buffer = market_snapshot.get("ltf_buffer", [])
+        extra = {k: v for k, v in market_snapshot.items() if k not in ["htf_buffer", "mtf_buffer", "ltf_buffer"]}
+        return self.aggregate_signals(htf_buffer, mtf_buffer, ltf_buffer, **extra)
+
     def aggregate_signals(self, htf_buffer: List[Dict], mtf_buffer: List[Dict], ltf_buffer: List[Dict], **kwargs) -> Optional[Dict]:
         """
         Implements the 'Triple-TF Filtration & Trigger' architecture:
