@@ -15,8 +15,7 @@ const fmtTime = () => new Date().toISOString().slice(11, 19);
 // =============================================================================
 const AccountLogin = ({ onLogin }) => {
   const [config, setConfig] = useState({
-    broker: { login: '', password: '', server: '' },
-    account: { balance: 10000 }
+    broker: { login: '', password: '', server: '' }
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -75,17 +74,6 @@ const AccountLogin = ({ onLogin }) => {
               value={config.broker.server}
               onChange={(e) => setConfig({...config, broker: {...config.broker, server: e.target.value}})}
               placeholder="ICMarkets-Demo"
-              style={styles.input}
-            />
-          </div>
-          
-          <div style={styles.field}>
-            <label style={styles.label}>ACCOUNT BALANCE</label>
-            <input
-              type="number"
-              value={config.account.balance}
-              onChange={(e) => setConfig({...config, account: {balance: Number(e.target.value)}})}
-              placeholder="10000"
               style={styles.input}
             />
           </div>
