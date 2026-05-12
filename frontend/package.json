@@ -41,60 +41,12 @@
     },
     "files": [
       "electron/**/*",
-      "dist/**/*",
-      "its_icon.png",
-      "its_icon.ico"
-    ],
-    "extraResources": [
-      {
-        "from": "../backend/dist/kingin_api",
-        "to": "backend"
-      },
-      {
-        "from": "../backend/models",
-        "to": "backend/models",
-        "filter": [
-          "**/*.joblib",
-          "**/*.pkl",
-          "**/*.json",
-          "**/*.txt"
-        ]
-      },
-      {
-        "from": "../backend/data",
-        "to": "backend/data",
-        "filter": [
-          "**/*.csv",
-          "**/*.db",
-          "**/*.json"
-        ]
-      },
-      {
-        "from": "../backend/config",
-        "to": "backend/config"
-      },
-      {
-        "from": "../backend/storage",
-        "to": "backend/storage",
-        "filter": [
-          "!logs/*"
-        ]
-      },
-      {
-        "from": "../backend/.env",
-        "to": "backend/.env"
-      }
+      "dist/**/*"
     ],
     "win": {
       "target": [
-        "nsis"
-      ],
-      "icon": "its_icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+        "portable"
+      ]
     }
   }
 }
