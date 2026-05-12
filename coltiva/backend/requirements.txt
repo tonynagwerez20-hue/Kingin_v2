@@ -1,0 +1,20 @@
+# Coltiva Backend Dependencies
+# FastAPI :8001
+
+# Core
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.0
+
+# HTTP
+httpx==0.25.0
+
+# LLM
+groq==0.4.2
+
+# Database
+supabase==1.2.0
+
+# Development
+pytest==7.4.0
+pytest-asyncio==0.23.0
