@@ -44,13 +44,13 @@ function startPython() {
   
   let script, cmd;
   if (isDev) {
-    script = path.join(__dirname, '..', '..', 'backend', 'kingin_api.py');
+    script = path.join(__dirname, '..', '..', 'backend', 'data_feed', 'server.py');
     cmd = 'python';
   } else {
-    // In production, we use the bundled kingin_api.exe (moved to resources/backend)
+    // In production, use bundled backend
     const backendRoot = path.join(process.resourcesPath, 'backend');
-    script = path.join(backendRoot, 'kingin_api.exe');
-    cmd = script;
+    script = path.join(backendRoot, 'data_feed', 'server.py');
+    cmd = 'python';
   }
 
   const spawnArgs = isDev ? [script] : [];

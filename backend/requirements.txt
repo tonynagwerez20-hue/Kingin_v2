@@ -19,3 +19,6 @@ cryptography
 click
 colorama
 pyjwt
+yfinance
+scikit-learn
+joblib
