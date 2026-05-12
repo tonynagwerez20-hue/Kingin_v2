@@ -55,6 +55,9 @@ server_start_time = time.time()
 mt5_latency_history = deque(maxlen=10)
 last_mt5_ping_time = 0
 
+# News layer mode - toggle between NEWS_SCALP and NORMAL modes
+news_layer_mode = "NORMAL"  # "NEWS_SCALP" or "NORMAL"
+
 
 # --- LOGGING SETUP ---
 class LoggerWriter:
@@ -1135,6 +1138,7 @@ async def get_engine_state():
             "killzone": "ASIAN",
             "session_time": "NEW_YORK",
             "rr_ratio": 0,
+            "news_layer_mode": news_layer_mode,
             "layers": [
                 {"name": "H1 Trend", "passed": bias != "NEUTRAL", "score": 80 if bias != "NEUTRAL" else 0, "reason": "H1 trend aligned" if bias != "NEUTRAL" else "No clear trend"},
                 {"name": "M15 Zone", "passed": False, "score": 0, "reason": "No supply/demand setup"},
@@ -1154,6 +1158,28 @@ async def get_engine_state():
         return JSONResponse(state)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/news_layer")
+async def set_news_layer(request: Request):
+    """Toggle or set news layer mode: NEWS_SCALP or NORMAL"""
+    try:
+        body = await request.json()
+        mode = body.get("mode", "NORMAL")
+        if mode not in ["NEWS_SCALP", "NORMAL"]:
+            return JSONResponse({"error": "Invalid mode"}, status_code=400)
+        global news_layer_mode
+        old_mode = news_layer_mode
+        news_layer_mode = mode
+        return JSONResponse({"success": True, "mode": news_layer_mode, "previous_mode": old_mode})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/news_layer")
+async def get_news_layer():
+    """Get current news layer mode"""
+    return JSONResponse({"mode": news_layer_mode})
 
 
 @app.websocket("/ws")

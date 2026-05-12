@@ -347,9 +347,13 @@ const SettingsPage = ({ config, onSave, onBack }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Toggle news layer mode
+      await api.post('/news_layer', {
+        mode: settings.newsLayer ? 'NEWS_SCALP' : 'NORMAL'
+      });
+      // Also save other settings
       await api.post('/settings', {
-        trading: { symbol: settings.symbol, lot_size: settings.lotSize, risk_percent: settings.riskPercent },
-        news_participate: settings.newsLayer
+        trading: { symbol: settings.symbol, lot_size: settings.lotSize, risk_percent: settings.riskPercent }
       });
       onSave(settings);
     } catch {}
