@@ -53,6 +53,6 @@ class LiquidityEngine:
         # Check nearby levels (e.g. +/- 5 ticks)
         # return "Liquidity Above" or "Liquidity Below"
         return {
-            "heatmap_bid": any(self.check_heatmap(p, 1, timestamp) for p in self.resting_orders if abs(p - current_price) < 2.0 and p < current_price),
-            "heatmap_ask": any(self.check_heatmap(p, 2, timestamp) for p in self.resting_orders if abs(p - current_price) < 2.0 and p > current_price)
+            "heatmap_bid": any(self.check_heatmap(p, side, timestamp) for (p, side) in self.resting_orders if abs(p - current_price) < 2.0 and p < current_price),
+            "heatmap_ask": any(self.check_heatmap(p, side, timestamp) for (p, side) in self.resting_orders if abs(p - current_price) < 2.0 and p > current_price)
         }

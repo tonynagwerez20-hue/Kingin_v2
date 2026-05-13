@@ -62,6 +62,9 @@ class V1FiltrationEngine:
             res = layer.process(market_snapshot)
             results.append(res)
             
+            # Inject results into snapshot so downstream layers (like ML) can see them
+            market_snapshot["layer_results"] = results
+            
             if not res.get("status", False):
                 return {
                     "action": "NO_TRADE", 

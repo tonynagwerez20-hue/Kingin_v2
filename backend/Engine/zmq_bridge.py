@@ -282,6 +282,20 @@ class ZMQBridge:
                 try: ctx.term()
                 except: pass
 
+    def get_account_balance(self) -> Optional[float]:
+        """Query HedgeEA for current account balance."""
+        res = self.query_ea("GET_BALANCE")
+        if res and res.get("status") == "SUCCESS":
+            return float(res.get("balance", 0.0))
+        return None
+
+    def get_account_equity(self) -> Optional[float]:
+        """Query HedgeEA for current account equity."""
+        res = self.query_ea("GET_EQUITY")
+        if res and res.get("status") == "SUCCESS":
+            return float(res.get("equity", 0.0))
+        return None
+
     def close(self):
         """Clean shutdown of PUB socket and ZMQ context."""
         with self._lock:

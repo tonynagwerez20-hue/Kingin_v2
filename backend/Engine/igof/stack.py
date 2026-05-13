@@ -68,6 +68,10 @@ class FiltrationController:
             market_snapshot.get("es_m15")
         )
         
+        # Guard against missing data (WAIT status)
+        if corr_res.get("status") == "WAIT":
+             corr_res = {"mode": "LOOSE", "signal": "NEUTRAL", "avg_correlation": 0.0}
+
         # 4. Liquidity
         liq_state = self.liquidity.get_market_state(price)
         
@@ -76,11 +80,11 @@ class FiltrationController:
         # DECISION MATRIX
         # Rule: No layer limits skipped.
         
-        if corr_res["mode"] == "STRICT" and corr_res["signal"] == "NEUTRAL":
+        if corr_res.get("mode") == "STRICT" and corr_res.get("signal") == "NEUTRAL":
             return {"action": "NO_TRADE", "reason": "Correlation Strict & Neutral"}
             
         if context == "BULLISH":
-            if corr_res["signal"] == "BEARISH_CONFIRMED":
+            if corr_res.get("signal") == "BEARISH_CONFIRMED":
                 return {"action": "NO_TRADE", "reason": "Macro Bullish but Correlation Bearish"}
             # Continue checks...
             return {"action": "LONG_ALLOWED", "reason": "All Clear"}
