@@ -9,7 +9,7 @@ SET "FRONTEND_DIR=%ROOT_DIR%frontend"
 echo.
 echo  ==========================================================
 echo     KINGIN INSTITUTIONAL TRADING SYSTEM
-echo     Master Launcher v2.0
+echo     Master Launcher v2.1
 echo  ==========================================================
 echo.
 
@@ -35,8 +35,8 @@ if %ERRORLEVEL% neq 0 (
 where curl >nul 2>nul
 SET "HAS_CURL=%ERRORLEVEL%"
 
-echo  [1/3] Starting Backend API (Port 8088)...
-start "KingIn API" cmd /k "cd /d "%BACKEND_DIR%" && python kingin_api.py"
+echo  [1/3] Starting Backend API (Port 8000)...
+start "KingIn API" cmd /k "cd /d "%BACKEND_DIR%\data_feed" && python server.py"
 
 :: ---- Wait for backend to become ready (poll up to 30s) ----
 echo  [2/3] Waiting for backend to become ready...
@@ -47,7 +47,7 @@ timeout /t 2 /nobreak > nul
 set /a TRIES+=1
 
 if %HAS_CURL%==0 (
-    curl -s --max-time 1 http://127.0.0.1:8088/api/system/status > nul 2>&1
+    curl -s --max-time 1 http://127.0.0.1:8000/status > nul 2>&1
     if !ERRORLEVEL!==0 goto BACKEND_READY
 ) else (
     :: Fallback: just wait 10s if curl is not available
@@ -64,7 +64,7 @@ echo         Check the "KingIn API" window for error details.
 goto START_FRONTEND
 
 :BACKEND_READY
-echo  [OK]  Backend is ready and responding on port 8088.
+echo  [OK]  Backend is ready and responding on port 8000.
 
 :START_FRONTEND
 echo  [3/3] Starting Frontend Dashboard (Port 5173)...
@@ -77,8 +77,9 @@ echo.
 echo  ==========================================================
 echo     SYSTEM IS RUNNING
 echo.
-echo     Dashboard:  http://localhost:5173
-echo     API Status: http://127.0.0.1:8088/api/system/status
+echo     Dashboard:    http://localhost:5173
+echo     API:        http://127.0.0.1:8000
+echo     Status:     http://127.0.0.1:8000/status
 echo.
 echo     To stop:    Close both console windows
 echo  ==========================================================
