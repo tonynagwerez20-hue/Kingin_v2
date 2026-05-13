@@ -92,6 +92,28 @@ const AccountLogin = ({ onLogin }) => {
 // TRADING PAGE COMPONENT
 // =============================================================================
 const TradingPage = ({ account, onLogout, online, state, engineStatus, onStartEngine, onStopEngine, loading }) => {
+  const [newsLayerMode, setNewsLayerMode] = useState('NORMAL');
+  
+  // API helper
+  const api = {
+    post: async (path, data = {}) => {
+      const res = await fetch('http://localhost:8000' + path, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    }
+  };
+  
+  // Toggle news layer mode
+  const toggleNewsLayer = async () => {
+    const newMode = newsLayerMode === 'NORMAL' ? 'NEWS_SCALP' : 'NORMAL';
+    try {
+      await api.post('/news_layer', { mode: newMode });
+      setNewsLayerMode(newMode);
+    } catch {}
+  };
   
   const balance = state?.account_balance || 0;
   const equity = state?.account_equity || balance || 0;
@@ -113,6 +135,7 @@ const TradingPage = ({ account, onLogout, online, state, engineStatus, onStartEn
   const session = state?.session_time || 'N/A';
   const layers = state?.layers || [];
   const logs = state?.pipeline_log || [];
+  const bufferStatus = state?.buffers || {};
   
   const handleStart = async () => {
     setLoading(true);
@@ -161,23 +184,14 @@ const TradingPage = ({ account, onLogout, online, state, engineStatus, onStartEn
         
         <div style={styles.headerRight}>
           <span style={styles.time}>{fmtTime()} UTC</span>
-          {/* Engine Controls */}
-          <div style={styles.engineControls}>
-            <button 
-              onClick={onStartEngine} 
-              disabled={loading}
-              style={{...styles.engineBtn, background: '#22c55e', marginRight: '4px'}}
-            >
-              START
-            </button>
-            <button 
-              onClick={onStopEngine} 
-              disabled={loading}
-              style={{...styles.engineBtn, background: '#ef4444'}}
-            >
-              STOP
-            </button>
-          </div>
+          {/* Buffer Status */}
+          {bufferStatus && (
+            <div style={styles.bufferStatus}>
+              <span style={styles.bufferItem}>H1: {bufferStatus.H1 || 0}</span>
+              <span style={styles.bufferItem}>M15: {bufferStatus.M15 || 0}</span>
+              <span style={styles.bufferItem}>M5: {bufferStatus.M5 || 0}</span>
+            </div>
+          )}
           {/* Heartbeats */}
           {engineStatus && (
             <div style={styles.heartbeats}>
@@ -209,6 +223,12 @@ const TradingPage = ({ account, onLogout, online, state, engineStatus, onStartEn
         <div style={styles.statItem}>
           <span style={styles.statLabel}>OPEN TRADES</span>
           <span style={styles.statValue}>{positions.length}</span>
+        </div>
+        <div style={styles.statItem}>
+          <span style={styles.statLabel}>NEWS LAYER</span>
+          <button onClick={toggleNewsLayer} style={{...styles.newsLayerBtn, background: newsLayerMode === 'NORMAL' ? '#3b82f6' : '#f59e0b'}}>
+            {newsLayerMode}
+          </button>
         </div>
       </div>
       
@@ -659,6 +679,23 @@ const styles = {
   },
   heartbeat: {
     color: '#64748b'
+  },
+  bufferStatus: {
+    display: 'flex',
+    gap: '8px',
+    fontSize: '10px'
+  },
+  bufferItem: {
+    color: '#64748b'
+  },
+  newsLayerBtn: {
+    padding: '4px 8px',
+    border: 'none',
+    borderRadius: '4px',
+    color: '#fff',
+    fontSize: '10px',
+    fontWeight: '600',
+    cursor: 'pointer'
   },
   logo: {
     color: '#eab308',
