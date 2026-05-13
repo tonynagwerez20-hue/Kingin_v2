@@ -1149,6 +1149,12 @@ async def get_engine_state():
         for tf in ["H1", "M15", "M5"]:
             buffer_status[tf] = len(ohlc_buffers.get(tf, []))
         
+        # Include OHLC data (last 20 candles per timeframe for frontend display)
+        ohlc_data = {}
+        for tf in ["H1", "M15", "M5"]:
+            candles = ohlc_buffers.get(tf, [])
+            ohlc_data[tf] = candles[-20:] if len(candles) > 20 else candles
+        
         # Build engine state response
         state = {
             "timestamp": int(time.time()),
@@ -1179,7 +1185,8 @@ async def get_engine_state():
             "positions": [],
             "warnings": [],
             "pipeline_log": [f"Server running in {get_env('DATA_SOURCE_TYPE', 'AUTO')} mode"],
-            "buffers": buffer_status
+            "buffers": buffer_status,
+            "ohlc_buffers": ohlc_data
         }
         
         return JSONResponse(state)
