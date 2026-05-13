@@ -91,8 +91,7 @@ const AccountLogin = ({ onLogin }) => {
 // =============================================================================
 // TRADING PAGE COMPONENT
 // =============================================================================
-const TradingPage = ({ account, onLogout, online, state }) => {
-  const [loading, setLoading] = useState(false);
+const TradingPage = ({ account, onLogout, online, state, engineStatus, onStartEngine, onStopEngine, loading }) => {
   
   const balance = state?.account_balance || 0;
   const equity = state?.account_equity || balance || 0;
@@ -162,6 +161,34 @@ const TradingPage = ({ account, onLogout, online, state }) => {
         
         <div style={styles.headerRight}>
           <span style={styles.time}>{fmtTime()} UTC</span>
+          {/* Engine Controls */}
+          <div style={styles.engineControls}>
+            <button 
+              onClick={onStartEngine} 
+              disabled={loading}
+              style={{...styles.engineBtn, background: '#22c55e', marginRight: '4px'}}
+            >
+              START
+            </button>
+            <button 
+              onClick={onStopEngine} 
+              disabled={loading}
+              style={{...styles.engineBtn, background: '#ef4444'}}
+            >
+              STOP
+            </button>
+          </div>
+          {/* Heartbeats */}
+          {engineStatus && (
+            <div style={styles.heartbeats}>
+              <span style={styles.heartbeat}>
+                MT5: {engineStatus.mt5?.connected ? '🟢' : '🔴'}
+              </span>
+              <span style={styles.heartbeat}>
+                EA: {engineStatus.ea?.running ? '🟢' : '🔴'}
+              </span>
+            </div>
+          )}
           <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
         </div>
       </header>
@@ -440,20 +467,29 @@ const FundedDashboard = ({ sessionToken, onLogout }) => {
   const [config, setConfig] = useState({});
   const [online, setOnline] = useState(false);
   const [state, setState] = useState(null);
+  const [engineStatus, setEngineStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
   
+  // Poll engine state and status every 2 seconds
   useEffect(() => {
     if (page !== 'trading') return;
     
     let mounted = true;
     const poll = async () => {
       try {
-        const res = await fetch('http://localhost:8000/engine_state');
-        if (res.ok) {
-          const data = await res.json();
+        // Get engine state
+        const stateRes = await fetch('http://localhost:8000/engine_state');
+        if (stateRes.ok) {
+          const data = await stateRes.json();
           setState(data);
           setOnline(true);
-        } else {
-          setOnline(false);
+        }
+        
+        // Get engine status (heartbeats)
+        const statusRes = await fetch('http://localhost:8000/engine/status');
+        if (statusRes.ok) {
+          const status = await statusRes.json();
+          setEngineStatus(status);
         }
       } catch {
         setOnline(false);
@@ -464,6 +500,22 @@ const FundedDashboard = ({ sessionToken, onLogout }) => {
     const interval = setInterval(poll, 2000);
     return () => { mounted = false; clearInterval(interval); };
   }, [page]);
+  
+  const handleStartEngine = async () => {
+    setLoading(true);
+    try {
+      await fetch('http://localhost:8000/engine/start', { method: 'POST' });
+    } catch {}
+    setLoading(false);
+  };
+  
+  const handleStopEngine = async () => {
+    setLoading(true);
+    try {
+      await fetch('http://localhost:8000/engine/stop', { method: 'POST' });
+    } catch {}
+    setLoading(false);
+  };
   
   const handleLogin = (acc) => {
     setAccount(acc);
@@ -482,7 +534,7 @@ const FundedDashboard = ({ sessionToken, onLogout }) => {
     return <AccountLogin onLogin={handleLogin} />;
   }
   
-  return <TradingPage account={account} onLogout={() => { setAccount(null); setPage('login'); }} online={online} state={state} />;
+  return <TradingPage account={account} onLogout={() => { setAccount(null); setPage('login'); }} online={online} state={state} engineStatus={engineStatus} onStartEngine={handleStartEngine} onStopEngine={handleStopEngine} loading={loading} />;
 };
 
 // =============================================================================
@@ -586,6 +638,27 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '16px'
+  },
+  engineControls: {
+    display: 'flex',
+    gap: '4px'
+  },
+  engineBtn: {
+    padding: '4px 8px',
+    border: 'none',
+    borderRadius: '4px',
+    color: '#fff',
+    fontSize: '10px',
+    fontWeight: '600',
+    cursor: 'pointer'
+  },
+  heartbeats: {
+    display: 'flex',
+    gap: '8px',
+    fontSize: '10px'
+  },
+  heartbeat: {
+    color: '#64748b'
   },
   logo: {
     color: '#eab308',

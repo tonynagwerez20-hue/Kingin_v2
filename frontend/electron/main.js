@@ -56,12 +56,12 @@ function startPython() {
   const spawnArgs = isDev ? [script] : [];
   const spawnOpts = { stdio: 'pipe', cwd: path.dirname(script) };
 
-  // ── Port Cleanup: Ensure 8088 is free before starting ──
-  // Synchronously kill any process using port 8088 to avoid race conditions
+  // ── Port Cleanup: Ensure 8000 is free before starting ──
+  // Synchronously kill any process using port 8000 to avoid race conditions
   const killExisting = () => {
     if (process.platform === 'win32') {
       try {
-        execSync('for /f "tokens=5" %a in (\'netstat -aon ^| findstr :8088\') do taskkill /f /pid %a', { stdio: 'ignore' });
+        execSync('for /f "tokens=5" %a in (\'netstat -aon ^| findstr :8000\') do taskkill /f /pid %a', { stdio: 'ignore' });
       } catch (e) {
         // Ignore errors if no process found
       }

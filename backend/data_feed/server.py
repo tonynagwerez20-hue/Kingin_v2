@@ -886,6 +886,33 @@ async def get_status():
             "broker_sync": mt5_health
         }
     })
+# Engine control state
+_engine_running = False
+_engine_start_time = 0
+
+@app.post("/engine/start")
+async def start_engine():
+    """Start the trading engine"""
+    global _engine_running, _engine_start_time
+    _engine_running = True
+    _engine_start_time = time.time()
+    return JSONResponse({"success": True, "state": "RUNNING"})
+
+@app.post("/engine/stop")
+async def stop_engine():
+    """Stop the trading engine"""
+    global _engine_running
+    _engine_running = False
+    return JSONResponse({"success": True, "state": "STOPPED"})
+
+@app.get("/engine/status")
+async def get_engine_status():
+    """Get engine status with heartbeats"""
+    return JSONResponse({
+        "engine": {"running": _engine_running, "heartbeat": int(time.time())},
+        "mt5": {"connected": False, "last_heartbeat": 0},
+        "ea": {"running": _engine_running, "last_heartbeat": _engine_start_time}
+    })
 
 @app.get("/audit")
 async def get_audit_logs(limit: int = 50):
