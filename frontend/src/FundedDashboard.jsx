@@ -91,8 +91,13 @@ const AccountLogin = ({ onLogin }) => {
 // =============================================================================
 // TRADING PAGE COMPONENT
 // =============================================================================
-const TradingPage = ({ account, onLogout, online, state, engineStatus, onStartEngine, onStopEngine, loading }) => {
-  const [newsLayerMode, setNewsLayerMode] = useState('NORMAL');
+const TradingPage = ({ account, onLogout, online, state, engineStatus, loading, newsLayerMode: propNewsLayerMode }) => {
+  const [newsLayerMode, setNewsLayerMode] = useState(propNewsLayerMode || 'NORMAL');
+  
+  // Sync newsLayerMode from parent when it changes
+  useEffect(() => {
+    if (propNewsLayerMode) setNewsLayerMode(propNewsLayerMode);
+  }, [propNewsLayerMode]);
   
   // API helper
   const api = {
@@ -488,6 +493,7 @@ const FundedDashboard = ({ sessionToken, onLogout }) => {
   const [online, setOnline] = useState(false);
   const [state, setState] = useState(null);
   const [engineStatus, setEngineStatus] = useState(null);
+  const [newsLayerMode, setNewsLayerMode] = useState('NORMAL');
   const [loading, setLoading] = useState(false);
   
   // Poll engine state and status every 2 seconds
@@ -503,6 +509,8 @@ const FundedDashboard = ({ sessionToken, onLogout }) => {
           const data = await stateRes.json();
           setState(data);
           setOnline(true);
+          // Also get news_layer_mode from state
+          if (data.news_layer_mode) setNewsLayerMode(data.news_layer_mode);
         }
         
         // Get engine status (heartbeats)
@@ -554,7 +562,7 @@ const FundedDashboard = ({ sessionToken, onLogout }) => {
     return <AccountLogin onLogin={handleLogin} />;
   }
   
-  return <TradingPage account={account} onLogout={() => { setAccount(null); setPage('login'); }} online={online} state={state} engineStatus={engineStatus} onStartEngine={handleStartEngine} onStopEngine={handleStopEngine} loading={loading} />;
+  return <TradingPage account={account} onLogout={() => { setAccount(null); setPage('login'); }} online={online} state={state} engineStatus={engineStatus} onStartEngine={handleStartEngine} onStopEngine={handleStopEngine} loading={loading} newsLayerMode={newsLayerMode} />;
 };
 
 // =============================================================================
