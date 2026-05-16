@@ -1,0 +1,68 @@
+{
+  "timestamp": 1777899716,
+  "symbol": "XAUUSD",
+  "bias": "NEUTRAL",
+  "current_price": 0.0,
+  "signal_action": "NEUTRAL",
+  "entry_price": 0.0,
+  "stop_loss": 0.0,
+  "take_profit": 0.0,
+  "lot_size": 0.01,
+  "execution_type": "MARKET",
+  "confluence_score": 0.0,
+  "account_equity": 100.0,
+  "account_balance": 100.0,
+  "floating_pnl": 0.0,
+  "open_trades_count": 0,
+  "positions": [],
+  "layers": [
+    {
+      "name": "KillzoneFilterLayer",
+      "passed": true,
+      "score": 1,
+      "reason": "Outside killzone"
+    },
+    {
+      "name": "MechanicalStructureLayer",
+      "passed": false,
+      "score": 0,
+      "reason": "Awaiting signal"
+    },
+    {
+      "name": "LiquiditySweepLayer",
+      "passed": false,
+      "score": 0,
+      "reason": "No sweep detected"
+    },
+    {
+      "name": "DisplacementLayer",
+      "passed": false,
+      "score": 0,
+      "reason": "No displacement"
+    },
+    {
+      "name": "FVGDiscountLayer",
+      "passed": false,
+      "score": 0,
+      "reason": "No FVG"
+    },
+    {
+      "name": "MicroMSSLayer",
+      "passed": false,
+      "score": 0,
+      "reason": "No MSS"
+    },
+    {
+      "name": "NewsEventLayer",
+      "passed": true,
+      "score": 1,
+      "reason": "Clear of news"
+    }
+  ],
+  "warnings": [],
+  "pipeline_log": [
+    "[2026-05-04T13:01:56.764930] Engine initialized",
+    "[2026-05-04T13:01:56.764930] Auto-detected MT5 account",
+    "[2026-05-04T13:01:56.764930] Dashboard connected and streaming live data"
+  ]
+}

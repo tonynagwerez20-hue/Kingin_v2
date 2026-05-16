@@ -1,0 +1,62 @@
+{
+  "name": "kingin-trading-system",
+  "version": "2.0.0",
+  "description": "KingIn Institutional Gold Trading System",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64",
+    "dist:portable": "electron-builder --win --x64 -c.win.target=portable"
+  },
+  "author": "Tony Nagwerez",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "electron": "^28.2.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.kingin.trading",
+    "productName": "KingIn Trading System",
+    "copyright": "Copyright © 2026 Tony Nagwerez. All Rights Reserved.",
+    "directories": {
+      "output": "installer_output"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/KingIn_v2.exe",
+        "to": "backend/KingIn_v2.exe"
+      },
+      {
+        "from": "../license.kingin",
+        "to": "backend/license.kingin"
+      }
+    ],
+    "win": {
+      "icon": "its_icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "publisherName": "Tony Nagwerez"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KingIn Trading System",
+      "installerIcon": "its_icon.ico",
+      "uninstallerIcon": "its_icon.ico",
+      "installerHeaderIcon": "its_icon.ico",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
