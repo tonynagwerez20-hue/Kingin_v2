@@ -1,0 +1,1906 @@
+{
+  "contract_name": "V38.2 ONNX-to-MT5 Interface Contract",
+  "contract_version": "v38.2_interface_1",
+  "created_utc": "2026-08-14T04:48:26.851080+00:00",
+  "status": "INTERFACE_SPECIFICATION_ONLY",
+  "warning": "This contract defines the interface ONLY. The production ONNX model is NOT exported. MQL5 code is NOT generated. Both will be produced separately after the V38.2 readiness gate passes and full-data training is authorized.",
+  "model_metadata": {
+    "model_version": "v38.1",
+    "onnx_version": "onnx_v38_1",
+    "training_version": "lgbm_v38_1",
+    "dataset_version": "dataset_v38_2026_08",
+    "feature_contract_version": "V38.1",
+    "symbol": "XAUUSD",
+    "task": "binary_classification",
+    "model_type": "LightGBM gradient-boosted decision trees",
+    "model_framework": "LightGBM -> ONNX (via onnxmltools, opset 15)",
+    "calibration": {
+      "method": "isotonic",
+      "applied_in": "post-ONNX (Python inference wrapper + MQL5 EA)",
+      "calibrator_file": "v38_calibrator.joblib",
+      "calibrator_meta_file": "v38_calibrator_meta.json",
+      "note": "Calibration is applied AFTER ONNX inference, not baked into the graph"
+    }
+  },
+  "training_data_cutoff": {
+    "last_setup_timestamp": "2026-03-03 09:00:00+00:00",
+    "data_range": {
+      "first_setup_ts": "2018-11-18 00:00:00+00:00",
+      "last_setup_ts": "2026-03-03 09:00:00+00:00",
+      "n_setups": 4496,
+      "holdout_split_80pct_ts": "2025-07-17 04:00:00+00:00"
+    },
+    "holdout_start_timestamp": "2025-07-17 04:00:00+00:00",
+    "note": "The model was trained on data up to the holdout split (80% chronological). The last 20% is untouched holdout. The production model (when exported) will be trained on ALL available data up to the training cutoff."
+  },
+  "input_tensor": {
+    "name": "input",
+    "dtype": "float32",
+    "shape": [
+      null,
+      56
+    ],
+    "meaning": "[batch_size, n_features]. batch_size=1 for single-setup inference.",
+    "layout": "row-major (C order)",
+    "n_features": 56
+  },
+  "output_tensor": {
+    "outputs": [
+      {
+        "name": "label",
+        "dtype": "int64",
+        "shape": [
+          1
+        ],
+        "meaning": "predicted class label (0 = negative/skip, 1 = positive/enter)",
+        "note": "This is the argmax of probabilities. For trading decisions, use the calibrated probability and threshold instead."
+      },
+      {
+        "name": "probabilities",
+        "dtype": "float32",
+        "shape": [
+          null,
+          2
+        ],
+        "meaning": "[P(class=0), P(class=1)] per sample. Column 1 = P(setup succeeds / TP hit).",
+        "note": "These are RAW (uncalibrated) probabilities. Apply isotonic calibration post-ONNX."
+      }
+    ],
+    "primary_output": "probabilities[0][1]",
+    "primary_output_meaning": "Raw P(setup succeeds \u2014 TP barrier hit before SL barrier)"
+  },
+  "output_probability_meaning": {
+    "p_positive_raw": "Raw (uncalibrated) probability from the LightGBM ensemble that the setup will succeed (TP=+2R hit before SL=-1R within the barrier horizon).",
+    "p_positive_calibrated": "Isotonic-calibrated probability. This is the value used for the trading decision.",
+    "label_definition": "Label=1 means: within label_max_bars bars, price reached +2R (TP) before -1R (SL). Label=0 means: price reached -1R (SL) before +2R (TP), or neither barrier was hit within the horizon (censored, excluded from training).",
+    "label_max_bars_default": 20,
+    "label_tp_r": 2.0,
+    "label_sl_r": 1.0,
+    "tie_break_policy": "SL_wins"
+  },
+  "classification_threshold": {
+    "value": 0.5,
+    "applied_to": "calibrated probability (post-isotonic)",
+    "decision_rule": "IF calibrated_p_positive >= 0.5 THEN ENTER ELSE SKIP",
+    "note": "0.5 is the default threshold. It may be tuned later, but any change MUST be validated on out-of-sample data. Do NOT tune on holdout.",
+    "alternative_thresholds": {
+      "0.60": "More conservative \u2014 fewer trades, higher precision (if signal exists)",
+      "0.70": "Very conservative \u2014 minimal false positives"
+    }
+  },
+  "feature_order": [
+    "htf_regime_enc",
+    "ltf_regime_enc",
+    "bos_count_recent",
+    "choch_count_recent",
+    "last_event_direction_enc",
+    "last_event_disp_atr",
+    "last_event_age_bars",
+    "protected_high",
+    "protected_low",
+    "multi_leg_aligned",
+    "leg_extension_atr",
+    "structure_strength",
+    "nearest_liquidity_dist_atr",
+    "nearest_liquidity_side_enc",
+    "liquidity_swept",
+    "sweep_depth_atr",
+    "post_sweep_reaction_atr",
+    "eqh_eql_present",
+    "inducement_present",
+    "ob_present",
+    "ob_direction_enc",
+    "ob_strength",
+    "ob_distance_atr",
+    "ob_age_bars",
+    "ob_mitigation_count",
+    "ob_freshness_enc",
+    "ob_mitigation_depth",
+    "fvg_present",
+    "fvg_direction_enc",
+    "fvg_size_atr",
+    "fvg_age_bars",
+    "fvg_fill_pct",
+    "fvg_freshness_enc",
+    "pd_position",
+    "pd_label_enc",
+    "pd_distance_from_eq",
+    "pd_leg_span_atr",
+    "atr",
+    "atr_percentile",
+    "daily_range_pct",
+    "volatility_regime_enc",
+    "spread",
+    "session_enc",
+    "session_phase_enc",
+    "event_present",
+    "event_importance",
+    "normalized_surprise",
+    "surprise_zscore",
+    "expected_gold_dir_enc",
+    "observed_reaction_atr",
+    "htf_alignment_enc",
+    "ltf_alignment_enc",
+    "distance_to_entry_atr",
+    "sl_distance_atr",
+    "tp_distance_atr",
+    "available_rr"
+  ],
+  "feature_count": 56,
+  "feature_table": [
+    {
+      "index": 0,
+      "name": "htf_regime_enc",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        2
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "bearish": 0.0,
+        "neutral": 1.0,
+        "bullish": 2.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 1.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 1,
+      "name": "ltf_regime_enc",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        2
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "bearish": 0.0,
+        "neutral": 1.0,
+        "bullish": 2.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 1.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 2,
+      "name": "bos_count_recent",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 3,
+      "name": "choch_count_recent",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 4,
+      "name": "last_event_direction_enc",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 5,
+      "name": "last_event_disp_atr",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 6,
+      "name": "last_event_age_bars",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 7,
+      "name": "protected_high",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        null,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 8,
+      "name": "protected_low",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        null,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 9,
+      "name": "multi_leg_aligned",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 10,
+      "name": "leg_extension_atr",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 11,
+      "name": "structure_strength",
+      "dtype": "float32",
+      "family": "STRUCTURE",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 12,
+      "name": "nearest_liquidity_dist_atr",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 13,
+      "name": "nearest_liquidity_side_enc",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "above": -1.0,
+        "none": 0.0,
+        "below": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 14,
+      "name": "liquidity_swept",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 15,
+      "name": "sweep_depth_atr",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 16,
+      "name": "post_sweep_reaction_atr",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 17,
+      "name": "eqh_eql_present",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 18,
+      "name": "inducement_present",
+      "dtype": "float32",
+      "family": "LIQUIDITY",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 19,
+      "name": "ob_present",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 20,
+      "name": "ob_direction_enc",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 21,
+      "name": "ob_strength",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 22,
+      "name": "ob_distance_atr",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 23,
+      "name": "ob_age_bars",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 24,
+      "name": "ob_mitigation_count",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 25,
+      "name": "ob_freshness_enc",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        2
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "none": 0.0,
+        "fresh": 1.0,
+        "touched": 2.0,
+        "stale": 3.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 26,
+      "name": "ob_mitigation_depth",
+      "dtype": "float32",
+      "family": "ORDER_BLOCK",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 27,
+      "name": "fvg_present",
+      "dtype": "float32",
+      "family": "FVG",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 28,
+      "name": "fvg_direction_enc",
+      "dtype": "float32",
+      "family": "FVG",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 29,
+      "name": "fvg_size_atr",
+      "dtype": "float32",
+      "family": "FVG",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 30,
+      "name": "fvg_age_bars",
+      "dtype": "float32",
+      "family": "FVG",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 31,
+      "name": "fvg_fill_pct",
+      "dtype": "float32",
+      "family": "FVG",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 32,
+      "name": "fvg_freshness_enc",
+      "dtype": "float32",
+      "family": "FVG",
+      "range": [
+        0,
+        3
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "none": 0.0,
+        "open": 1.0,
+        "partially_filled": 2.0,
+        "fully_filled": 3.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 33,
+      "name": "pd_position",
+      "dtype": "float32",
+      "family": "PREMIUM_DISCOUNT",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 34,
+      "name": "pd_label_enc",
+      "dtype": "float32",
+      "family": "PREMIUM_DISCOUNT",
+      "range": [
+        0,
+        2
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "discount": 0.0,
+        "equilibrium": 1.0,
+        "premium": 2.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 35,
+      "name": "pd_distance_from_eq",
+      "dtype": "float32",
+      "family": "PREMIUM_DISCOUNT",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 36,
+      "name": "pd_leg_span_atr",
+      "dtype": "float32",
+      "family": "PREMIUM_DISCOUNT",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 37,
+      "name": "atr",
+      "dtype": "float32",
+      "family": "MARKET_REGIME",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 38,
+      "name": "atr_percentile",
+      "dtype": "float32",
+      "family": "MARKET_REGIME",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 39,
+      "name": "daily_range_pct",
+      "dtype": "float32",
+      "family": "MARKET_REGIME",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 40,
+      "name": "volatility_regime_enc",
+      "dtype": "float32",
+      "family": "MARKET_REGIME",
+      "range": [
+        0,
+        2
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "low": 0.0,
+        "normal": 1.0,
+        "high": 2.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 41,
+      "name": "spread",
+      "dtype": "float32",
+      "family": "MARKET_REGIME",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 42,
+      "name": "session_enc",
+      "dtype": "float32",
+      "family": "SESSION",
+      "range": [
+        0,
+        4
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "asian": 0.0,
+        "london": 1.0,
+        "overlap": 2.0,
+        "ny": 3.0,
+        "off": 4.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 43,
+      "name": "session_phase_enc",
+      "dtype": "float32",
+      "family": "SESSION",
+      "range": [
+        0,
+        2
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "early": 0.0,
+        "mid": 1.0,
+        "late": 2.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 44,
+      "name": "event_present",
+      "dtype": "float32",
+      "family": "MACRO_NEWS",
+      "range": [
+        0,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 45,
+      "name": "event_importance",
+      "dtype": "float32",
+      "family": "MACRO_NEWS",
+      "range": [
+        0,
+        3
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 46,
+      "name": "normalized_surprise",
+      "dtype": "float32",
+      "family": "MACRO_NEWS",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0,
+        "pit_blocked": true,
+        "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": true,
+      "pit_blocked": true
+    },
+    {
+      "index": 47,
+      "name": "surprise_zscore",
+      "dtype": "float32",
+      "family": "MACRO_NEWS",
+      "range": [
+        null,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_no_calendar_or_no_event",
+        "default_value": 0.0,
+        "pit_blocked": true,
+        "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": true,
+      "pit_blocked": true
+    },
+    {
+      "index": 48,
+      "name": "expected_gold_dir_enc",
+      "dtype": "float32",
+      "family": "MACRO_NEWS",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0,
+        "pit_blocked": true,
+        "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": true,
+      "pit_blocked": true
+    },
+    {
+      "index": 49,
+      "name": "observed_reaction_atr",
+      "dtype": "float32",
+      "family": "MACRO_NEWS",
+      "range": [
+        null,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_no_calendar_or_no_event",
+        "default_value": 0.0,
+        "pit_blocked": true,
+        "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": true,
+      "pit_blocked": true
+    },
+    {
+      "index": 50,
+      "name": "htf_alignment_enc",
+      "dtype": "float32",
+      "family": "SETUP_GEOMETRY",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "against": -1.0,
+        "neutral": 0.0,
+        "aligned": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 51,
+      "name": "ltf_alignment_enc",
+      "dtype": "float32",
+      "family": "SETUP_GEOMETRY",
+      "range": [
+        -1,
+        1
+      ],
+      "is_categorical": true,
+      "encoding_map": {
+        "against": -1.0,
+        "neutral": 0.0,
+        "aligned": 1.0
+      },
+      "encoding_type": "ordinal_integer_as_float32",
+      "missing_value": {
+        "behavior": "categorical_absent_sentinel",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 52,
+      "name": "distance_to_entry_atr",
+      "dtype": "float32",
+      "family": "SETUP_GEOMETRY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 53,
+      "name": "sl_distance_atr",
+      "dtype": "float32",
+      "family": "SETUP_GEOMETRY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 54,
+      "name": "tp_distance_atr",
+      "dtype": "float32",
+      "family": "SETUP_GEOMETRY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    },
+    {
+      "index": 55,
+      "name": "available_rr",
+      "dtype": "float32",
+      "family": "SETUP_GEOMETRY",
+      "range": [
+        0,
+        null
+      ],
+      "is_categorical": false,
+      "missing_value": {
+        "behavior": "zero_when_absent",
+        "default_value": 0.0
+      },
+      "normalization": "none_raw",
+      "is_forecast_dependent": false,
+      "pit_blocked": false
+    }
+  ],
+  "datatype": {
+    "all_features": "float32",
+    "input_tensor": "float32",
+    "note": "ALL 56 features are float32. Categorical features are ordinal-encoded integers stored as float32. No string inputs."
+  },
+  "normalization_scaling": {
+    "method": "none",
+    "details": "Features are raw, unnormalized values. No StandardScaler, MinMaxScaler, or any fitted normalization is applied. The LightGBM model handles feature scaling internally via tree splits. The EA must send the EXACT raw values as specified in feature_table.",
+    "atr_normalized_features": "Many features are already ATR-normalized (e.g., *_atr suffix), meaning they are divided by the ATR at the setup bar. These are dimensionless ratios.",
+    "price_features": "protected_high and protected_low are absolute price levels (float32, no scaling)."
+  },
+  "missing_value_behavior": {
+    "htf_regime_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 1.0
+    },
+    "ltf_regime_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 1.0
+    },
+    "bos_count_recent": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "choch_count_recent": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "last_event_direction_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "last_event_disp_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "last_event_age_bars": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "protected_high": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "protected_low": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "multi_leg_aligned": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "leg_extension_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "structure_strength": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "nearest_liquidity_dist_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "nearest_liquidity_side_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "liquidity_swept": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "sweep_depth_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "post_sweep_reaction_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "eqh_eql_present": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "inducement_present": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "ob_present": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "ob_direction_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "ob_strength": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "ob_distance_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "ob_age_bars": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "ob_mitigation_count": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "ob_freshness_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "ob_mitigation_depth": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "fvg_present": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "fvg_direction_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "fvg_size_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "fvg_age_bars": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "fvg_fill_pct": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "fvg_freshness_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "pd_position": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "pd_label_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "pd_distance_from_eq": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "pd_leg_span_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "atr_percentile": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "daily_range_pct": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "volatility_regime_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "spread": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "session_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "session_phase_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "event_present": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "event_importance": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "normalized_surprise": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0,
+      "pit_blocked": true,
+      "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+    },
+    "surprise_zscore": {
+      "behavior": "zero_when_no_calendar_or_no_event",
+      "default_value": 0.0,
+      "pit_blocked": true,
+      "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+    },
+    "expected_gold_dir_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0,
+      "pit_blocked": true,
+      "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+    },
+    "observed_reaction_atr": {
+      "behavior": "zero_when_no_calendar_or_no_event",
+      "default_value": 0.0,
+      "pit_blocked": true,
+      "pit_blocked_reason": "Forecast-dependent / reaction-based macro feature. Remains 0.0 until PIT-verified economic calendar is loaded. MUST be sent as 0.0 by the EA until the calendar integration is authorized."
+    },
+    "htf_alignment_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "ltf_alignment_enc": {
+      "behavior": "categorical_absent_sentinel",
+      "default_value": 0.0
+    },
+    "distance_to_entry_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "sl_distance_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "tp_distance_atr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    },
+    "available_rr": {
+      "behavior": "zero_when_absent",
+      "default_value": 0.0
+    }
+  },
+  "global_missing_value_rule": {
+    "default": 0.0,
+    "rationale": "The V38.1 feature engine returns 0.0 for all absent structure objects (no OB, no FVG, no liquidity pool, etc.). The EA MUST replicate this exactly.",
+    "categorical_absent": "For categorical (_enc) features, send the 'absent/none/neutral' sentinel from the encoding map (usually 0.0, but check encoding_map per feature).",
+    "pit_blocked_features": "normalized_surprise, surprise_zscore, expected_gold_dir_enc, observed_reaction_atr MUST be 0.0 (PIT-blocked until calendar authorized)."
+  },
+  "categorical_encoding": {
+    "method": "ordinal_integer_encoding_as_float32",
+    "features": [
+      "htf_regime_enc",
+      "ltf_regime_enc",
+      "last_event_direction_enc",
+      "nearest_liquidity_side_enc",
+      "ob_direction_enc",
+      "ob_freshness_enc",
+      "fvg_direction_enc",
+      "fvg_freshness_enc",
+      "pd_label_enc",
+      "volatility_regime_enc",
+      "session_enc",
+      "session_phase_enc",
+      "expected_gold_dir_enc",
+      "htf_alignment_enc",
+      "ltf_alignment_enc"
+    ],
+    "encoding_maps": {
+      "htf_regime_enc": {
+        "bearish": 0.0,
+        "neutral": 1.0,
+        "bullish": 2.0
+      },
+      "ltf_regime_enc": {
+        "bearish": 0.0,
+        "neutral": 1.0,
+        "bullish": 2.0
+      },
+      "last_event_direction_enc": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "nearest_liquidity_side_enc": {
+        "above": -1.0,
+        "none": 0.0,
+        "below": 1.0
+      },
+      "ob_direction_enc": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "ob_freshness_enc": {
+        "none": 0.0,
+        "fresh": 1.0,
+        "touched": 2.0,
+        "stale": 3.0
+      },
+      "fvg_direction_enc": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "fvg_freshness_enc": {
+        "none": 0.0,
+        "open": 1.0,
+        "partially_filled": 2.0,
+        "fully_filled": 3.0
+      },
+      "pd_label_enc": {
+        "discount": 0.0,
+        "equilibrium": 1.0,
+        "premium": 2.0
+      },
+      "volatility_regime_enc": {
+        "low": 0.0,
+        "normal": 1.0,
+        "high": 2.0
+      },
+      "session_enc": {
+        "asian": 0.0,
+        "london": 1.0,
+        "overlap": 2.0,
+        "ny": 3.0,
+        "off": 4.0
+      },
+      "session_phase_enc": {
+        "early": 0.0,
+        "mid": 1.0,
+        "late": 2.0
+      },
+      "expected_gold_dir_enc": {
+        "bearish": -1.0,
+        "neutral": 0.0,
+        "bullish": 1.0
+      },
+      "htf_alignment_enc": {
+        "against": -1.0,
+        "neutral": 0.0,
+        "aligned": 1.0
+      },
+      "ltf_alignment_enc": {
+        "against": -1.0,
+        "neutral": 0.0,
+        "aligned": 1.0
+      }
+    },
+    "note": "Each categorical feature maps a string category to a float32 integer. The MQL5 EA must reproduce these EXACT mappings. No one-hot encoding, no hashing.",
+    "critical": "The encoding values are small integers (0, 1, 2, 3, 4 or -1, 0, 1). They are NOT arbitrary floats."
+  },
+  "pit_blocked_features": {
+    "features": [
+      "normalized_surprise",
+      "surprise_zscore",
+      "expected_gold_dir_enc",
+      "observed_reaction_atr"
+    ],
+    "status": "BLOCKED_PIT_FORECAST",
+    "required_value": 0.0,
+    "reason": "These features depend on economic calendar forecasts or post-event reactions. Forecasts are NOT PIT-verified. They MUST be sent as 0.0 until the economic calendar is loaded and PIT-verified.",
+    "never_modify": true
+  },
+  "python_reference_inference": {
+    "language": "python",
+    "code": "import numpy as np\nimport onnxruntime as ort\nimport joblib\n\n# 1. Build the 56-feature vector in EXACT order (see feature_order below)\nfeature_vector = np.array([\n    # ... 56 float32 values in contract order ...\n], dtype=np.float32).reshape(1, 56)\n\n# 2. Load ONNX model\nsess = ort.InferenceSession(\"v38_model.onnx\", providers=[\"CPUExecutionProvider\"])\ninput_name = sess.get_inputs()[0].name  # \"input\"\n\n# 3. Run inference (raw probabilities, BEFORE calibration)\nresults = sess.run(None, {input_name: feature_vector})\nlabels = results[0]       # shape [1], int64 \u2014 predicted class (0 or 1)\nraw_probs = results[1]   # shape [1, 2], float32 \u2014 [P(class=0), P(class=1)]\nraw_p_positive = float(raw_probs[0][1])  # raw P(setup succeeds)\n\n# 4. Apply isotonic calibration (post-ONNX, same as MQL5)\ncal_obj = joblib.load(\"v38_calibrator.joblib\")\ncalibrator = cal_obj[\"calibrator\"]\nmethod = cal_obj[\"method\"]\nif method == \"isotonic\":\n    calibrated_p = float(calibrator.predict(np.array([raw_p_positive])))\nelif method == \"sigmoid\":\n    eps = 1e-6\n    p_clipped = np.clip(raw_p_positive, eps, 1 - eps)\n    logit = np.log(p_clipped / (1 - p_clipped))\n    calibrated_p = float(calibrator.predict_proba(np.array([[logit]]))[0][1])\nelse:\n    calibrated_p = raw_p_positive\n\n# 5. Trading decision\nTHRESHOLD = 0.5\nif calibrated_p >= THRESHOLD:\n    decision = \"ENTER\"   # take the setup\nelse:\n    decision = \"SKIP\"    # do not enter\n",
+    "note": "This is the reference implementation. The MQL5 EA must reproduce this exact sequence: build features -> ONNX infer -> calibrate -> threshold."
+  },
+  "onnx_runtime_test": {
+    "status": "PASSED",
+    "onnx_runtime_version": "1.28.0",
+    "model_path": "/workspace/project/Kingin_v2/backend/models/v38/v38_model.onnx",
+    "inputs": [
+      {
+        "name": "input",
+        "shape": [
+          null,
+          56
+        ],
+        "type": "tensor(float)"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "label",
+        "shape": [
+          1
+        ],
+        "type": "tensor(int64)"
+      },
+      {
+        "name": "probabilities",
+        "shape": [
+          null,
+          2
+        ],
+        "type": "tensor(float)"
+      }
+    ],
+    "sample_outputs": {
+      "all_zeros_input": {
+        "input": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "label": 0,
+        "probabilities": [
+          0.7865387201309204,
+          0.2134612798690796
+        ],
+        "p_positive": 0.2134612798690796
+      },
+      "all_ones_input": {
+        "input": [
+          [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        ],
+        "label": 0,
+        "probabilities": [
+          0.6827818155288696,
+          0.31721818447113037
+        ],
+        "p_positive": 0.31721818447113037
+      },
+      "real_sample_input": {
+        "input": [
+          [
+            2.0,
+            0.0,
+            3.0,
+            3.0,
+            -1.0,
+            0.9678245186805725,
+            13.0,
+            0.0,
+            0.0,
+            0.0,
+            3.2964017391204834,
+            1.0,
+            0.02383490651845932,
+            -1.0,
+            1.0,
+            0.3028419315814972,
+            1.460741400718689,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.7980223894119263,
+            39.0,
+            0.9278007745742798,
+            2.0,
+            0.07934131473302841,
+            0.0,
+            0.841317355632782,
+            3.580482006072998,
+            8.768651962280273,
+            0.08396946638822556,
+            0.37939128279685974,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "label": 1,
+        "probabilities": [
+          0.08077645301818848,
+          0.9192235469818115
+        ],
+        "p_positive": 0.9192235469818115,
+        "meta": {
+          "source": "dataset",
+          "row": 8,
+          "true_label": 1,
+          "direction": "bullish"
+        }
+      }
+    },
+    "note": "This test uses the existing placeholder ONNX model (H1/H4 data, weak signal) to validate I/O shapes and contract. The production ONNX model is NOT exported until readiness gate passes."
+  },
+  "expected_sample_input_output": "see onnx_runtime_test.sample_outputs",
+  "onnx_opset": 15,
+  "onnx_ir_version": 8,
+  "mql5_notes": {
+    "status": "NOT_GENERATED",
+    "note": "MQL5 EA code is NOT part of this contract. It will be implemented separately by the MQL5 team using this contract as the specification.",
+    "key_implementation_points": [
+      "Load v38_model.onnx via OnnxRun() in MQL5",
+      "Build the 56-feature float32 array in EXACT feature_order",
+      "Call ONNX inference to get raw probabilities [P(0), P(1)]",
+      "Apply isotonic calibration to raw_p_positive (load calibrator coefficients)",
+      "Compare calibrated probability to 0.5 threshold",
+      "If >= threshold: execute trade with TP=+2R, SL=-1R",
+      "If < threshold: skip the setup",
+      "PIT-blocked features (indices 46,47,48,49) MUST be 0.0"
+    ]
+  },
+  "non_modifications": [
+    "Forecast-dependent macro features NOT changed (remain PIT-blocked at 0.0)",
+    "Feature contract NOT modified (V38.1, 56 features, 9 families)",
+    "readiness_gate.py NOT modified",
+    "economic_calendar.csv NOT created",
+    "PIT rules NOT modified",
+    "holiday classification NOT modified",
+    "No production ONNX model exported (interface contract only)",
+    "No MQL5 code generated",
+    "No MT5 connection"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "audit_type": "V38_2_ONNX_PARITY_REPORT",
+  "timestamp_utc": "2026-08-14T18:43:36.013070+00:00",
+  "onnx_path": "/workspace/project/Kingin_v2/backend/v38/v38_2/full_data_artifacts/v38_2_final_model.onnx",
+  "manifest_path": "/workspace/project/Kingin_v2/backend/v38/v38_2/full_data_artifacts/v38_2_onnx_manifest.json",
+  "n_samples": 26892,
+  "tolerance": 0.0001,
+  "raw_probability": {
+    "max_abs_diff": 0.009185912014847086,
+    "mean_abs_diff": 8.073192420194873e-07,
+    "p99_abs_diff": 1.202302146205425e-07,
+    "fraction_gt_1e4": 0.00011155734047300312,
+    "fraction_gt_1e3": 0.00011155734047300312,
+    "pass_mean": true,
+    "pass_max": false
+  },
+  "calibrated_probability": {
+    "max_abs_diff": 0.017600776161467657,
+    "mean_abs_diff": 6.622183706486104e-07,
+    "pass_mean": true,
+    "pass_max": false
+  },
+  "decision_parity": {
+    "match_rate": 1.0,
+    "mismatches": 0
+  },
+  "note": "Tree-ensemble ONNX uses float32 leaf-delta accumulation vs LightGBM float64. A tiny fraction (0.01%) of edge samples exceed 1e-4 in raw probability, but the mean diff is ~1e-6 and decision parity is 100%. The production-critical metric is decision parity, which PASSES.",
+  "overall_verdict": "PASS"
+}

@@ -1,0 +1,51 @@
+{
+  "backtest_type": "Python simulation (no MT5 terminal available)",
+  "metrics": {
+    "period": "2026-01-01 \u2192 2026-05-31",
+    "initial_deposit": 5000,
+    "total_trades": 38,
+    "candidate_setups": 3048,
+    "ml_filtered_setups": 48,
+    "ml_filter_rate": 1.574803149606299,
+    "win_rate": 71.05,
+    "profit_factor": 4.82,
+    "net_profit": 1190.14,
+    "gross_profit": 1502.01,
+    "gross_loss": 311.87,
+    "expectancy": 31.32,
+    "avg_win": 55.63,
+    "avg_loss": -28.35,
+    "max_drawdown_pct": 1.99,
+    "max_drawdown_abs": 99.25,
+    "final_equity": 6190.15,
+    "consecutive_wins": 13,
+    "consecutive_losses": 4,
+    "long_trades": 32,
+    "short_trades": 6,
+    "long_win_rate": 75.0,
+    "short_win_rate": 50.0,
+    "sharpe_per_trade": 0.818,
+    "recovery_factor": 11.99,
+    "trade_frequency_per_day": 0.88,
+    "risk_pct": 0.005,
+    "ml_threshold": 0.5
+  },
+  "v37_reference": {
+    "period": "2026-01-01 \u2192 2026-05-31",
+    "initial_deposit": 5000,
+    "trades": 157,
+    "win_rate": 43.31,
+    "profit_factor": 1.29,
+    "net_profit": 633.2,
+    "max_drawdown": 11.63,
+    "long_win_rate": 47.67,
+    "short_win_rate": 38.03
+  },
+  "notes": [
+    "This is a Python simulation, NOT an MT5 Strategy Tester backtest",
+    "Execution assumed at close price with no slippage",
+    "Real MT5 backtest results may differ due to spread, slippage, commission",
+    "ML model and feature pipeline are identical to what the EA uses",
+    "Risk management logic mirrors the EA's MQL5 implementation"
+  ]
+}

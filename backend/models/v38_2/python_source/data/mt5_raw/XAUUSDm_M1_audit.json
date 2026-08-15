@@ -1,0 +1,22 @@
+{
+  "status": "BLOCKED_BY_ENVIRONMENT",
+  "reason": "MetaTrader5 package not importable \u2014 Linux environment",
+  "symbol": "XAUUSDm",
+  "start": "2018-01-01",
+  "end": "2026-03-04",
+  "earliest_available": null,
+  "latest_available": null,
+  "total_m1_bars": 0,
+  "bars_per_year": {},
+  "trading_days": 0,
+  "missing_dates": "UNKNOWN",
+  "max_gap_h": null,
+  "unexpected_gaps": "UNKNOWN",
+  "duplicates": 0,
+  "nan_count": 0,
+  "inf_count": 0,
+  "invalid_ohlc_count": 0,
+  "spread_available": "UNKNOWN",
+  "timezone": "UNKNOWN",
+  "note": "This script must be run on Windows with the FBS MT5 terminal. No data fabricated. No assumptions made about MT5 coverage."
+}

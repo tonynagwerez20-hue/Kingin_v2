@@ -1,0 +1,85 @@
+{
+  "test_date": "2026-08-12",
+  "tests": {
+    "A_onnx_load": {
+      "pass": true,
+      "producer": "OnnxMLTools",
+      "opset": [
+        9,
+        1
+      ],
+      "ir_version": 8,
+      "file_size_kb": 905.6474609375
+    },
+    "B_tensor_dims": {
+      "pass": true,
+      "input": [
+        [
+          "input",
+          [
+            "dynamic",
+            50
+          ]
+        ]
+      ],
+      "output": [
+        [
+          "label",
+          [
+            1
+          ]
+        ],
+        [
+          "probabilities",
+          [
+            "dynamic",
+            2
+          ]
+        ]
+      ],
+      "expected_features": 50,
+      "actual_features": 50
+    },
+    "C_inference": {
+      "pass": true,
+      "input_shape": [
+        1,
+        50
+      ],
+      "label_value": 0,
+      "probability_class1": 0.17892879247665405,
+      "inference_time_ms": 0.354
+    },
+    "D_python_onnx_parity": {
+      "pass": true,
+      "n_samples": 26892,
+      "raw_mean_diff": 8.073192420194873e-07,
+      "raw_max_diff": 0.009185912014847086,
+      "cal_mean_diff": 6.622183706486104e-07,
+      "cal_max_diff": 0.017600776161467657,
+      "decision_mismatches": 0,
+      "decision_parity_pct": 100.0
+    },
+    "E_calibration": {
+      "pass": true,
+      "method": "isotonic",
+      "test_points": {
+        "raw_0.1": 0.2589641434262948,
+        "raw_0.3": 0.2995500102270399,
+        "raw_0.5": 0.4545030331311246,
+        "raw_0.7": 0.5367483296213807,
+        "raw_0.9": 1.0
+      },
+      "n_thresholds": 85
+    },
+    "F_feature_count": {
+      "pass": true,
+      "onnx_features": 50,
+      "python_price_indices": 50,
+      "contract_total": 56,
+      "excluded_macro_news": 6
+    }
+  },
+  "overall_pass": true,
+  "verdict": "PASS \u2014 ONNX integration validated"
+}

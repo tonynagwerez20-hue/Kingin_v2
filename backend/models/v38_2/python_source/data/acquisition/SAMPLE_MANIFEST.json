@@ -1,0 +1,77 @@
+{
+  "provider": "Dukascopy",
+  "instrument": "XAUUSD",
+  "source_tf": "M1 ticks",
+  "window": {
+    "start": "2024-01-08T00:00:00+00:00",
+    "end": "2024-01-13T00:00:00+00:00"
+  },
+  "retrieval_time_utc": "2026-08-12T14:47:31.947363+00:00",
+  "download": {
+    "downloaded": 112,
+    "cached": 0,
+    "empty": 6,
+    "failed": 2
+  },
+  "m1_rows": 6720,
+  "m5_rows": 1344,
+  "m15_rows": 448,
+  "m5_validation": {
+    "n_rows": 1344,
+    "nan_count": 0,
+    "inf_count": 0,
+    "duplicate_ts_count": 0,
+    "invalid_ohlc_count": 0,
+    "non_positive_price_count": 0,
+    "not_chronological": false,
+    "spread_status": "observed",
+    "ok": true,
+    "errors": [],
+    "gaps": {
+      "weekend_gap_count": 0,
+      "daily_rollover_gap_count": 6,
+      "unexpected_gap_count": 0,
+      "unexpected_gap_examples": [],
+      "max_gap_hours": 1.08
+    }
+  },
+  "m15_validation": {
+    "n_rows": 448,
+    "nan_count": 0,
+    "inf_count": 0,
+    "duplicate_ts_count": 0,
+    "invalid_ohlc_count": 0,
+    "non_positive_price_count": 0,
+    "not_chronological": false,
+    "spread_status": "observed",
+    "ok": true,
+    "errors": [],
+    "gaps": {
+      "weekend_gap_count": 0,
+      "daily_rollover_gap_count": 6,
+      "unexpected_gap_count": 0,
+      "unexpected_gap_examples": [],
+      "max_gap_hours": 1.25
+    }
+  },
+  "cross_feed": {
+    "H1": {
+      "overlap_timestamps": 112,
+      "broker_only": 28215,
+      "dukas_only": 0,
+      "mean_close_diff": 0.1209,
+      "median_close_diff": 0.111,
+      "max_close_diff": 0.482,
+      "mean_high_diff": 0.1204,
+      "mean_low_diff": 0.1354,
+      "pct_close_within_0_1usd": 0.4107,
+      "pct_close_within_0_5usd": 1.0,
+      "pct_close_within_1usd": 1.0,
+      "spread_status": "n/a",
+      "notes": [
+        "H1: 112 overlapping bars; 100.0% within $0.50 close"
+      ]
+    }
+  },
+  "note": "genuine Dukascopy sample; readiness gate still BLOCKED (sample < 365-day requirement)"
+}

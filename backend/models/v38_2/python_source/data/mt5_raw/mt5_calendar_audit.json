@@ -1,0 +1,26 @@
+{
+  "status": "SOURCE_UNAVAILABLE",
+  "reason": "MetaTrader5 package not importable \u2014 Linux environment",
+  "capabilities": {
+    "mt5_available": false,
+    "calendar_history_available": false,
+    "forecast_column_exists": false,
+    "previous_column_exists": false,
+    "revised_previous_column_exists": false,
+    "release_ts_column_exists": false,
+    "importance_available": false,
+    "usd_events_found": false,
+    "coverage_2018_to_2026": false,
+    "historical_vintages": false
+  },
+  "pit_test": {
+    "pit_status": "blocked",
+    "leakage_findings": [
+      "MT5 calendar source not accessible \u2014 cannot test PIT"
+    ],
+    "may_ingest": false
+  },
+  "raw_export": null,
+  "economic_calendar_csv_written": false,
+  "note": "No calendar file manufactured. Option-B features remain PIT_BLOCKED_NO_SOURCE."
+}
