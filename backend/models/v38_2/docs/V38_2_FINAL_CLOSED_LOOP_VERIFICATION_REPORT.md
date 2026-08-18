@@ -321,18 +321,35 @@ file imported into a custom symbol.
 
 1. ~~MT5 compilation may reveal MQL5-specific errors~~ — **resolved 2026-08-18**:
    `V38_2_EA.mq5` compiles cleanly via MetaEditor64 (Wine 10.0), 0 errors / 0
-   warnings, `V38_2_EA.ex5` produced (128,472 B). The `long label[1]` +
-   `float proba[2]` OnnxRun ordering and opset-9 output binding are confirmed
-   by the Python/ONNX re-verification (G3).
-2. **Session timezone:** broker time vs UTC must be confirmed/converted at
+   warnings, `V38_2_EA.ex5` produced. The `long label[1]` + `float proba[2]`
+   OnnxRun ordering and opset-9 output binding are confirmed by the
+   Python/ONNX re-verification (G3).
+2. ~~ONNX/calibrator file load fails in Strategy Tester (err 5019)~~ — **resolved
+   2026-08-18 (build 38.21)**: the EA previously used `OnnxCreate(filename)` and
+   `FileOpen(filename)` with a bare filename. In the Strategy Tester, the agent
+   runs in `Tester\<hash>\Agent-127.0.0.1-3000\` whose `MQL5\Files` is empty, so
+   both failed with **ERR_FILE_NOT_EXIST=5019** and `OnInit` aborted (code 1).
+   **Fix:** the canonical ONNX model and calibrator JSON are now embedded
+   directly into `V38_2_EA.ex5` via `#resource "\\Files\\v38_2_final_model.onnx"
+   as uchar g_onnx_data[]` and `#resource "\\Files\\v38_2_calibrator.json" as
+   uchar g_cal_data[]` (byte-for-byte: 927,383 B + 4,107 B, confirmed in the
+   compile log). `OnInit` now loads via `OnnxCreateFromBuffer(g_onnx_data,
+   ONNX_DEFAULT)` and `g_cal.LoadFromString(CharArrayToString(g_cal_data))`,
+   with the old file path retained as a fallback for terminal hot-swap.
+   Diagnostic logging (resource size, file-existence check, error codes) added
+   before each load. This mirrors the V37 reference, which used
+   `#resource` + `OnnxCreateFromBuffer`.
+3. **Session timezone:** broker time vs UTC must be confirmed/converted at
    runtime (source-level handling present).
-3. **Structure runtime parity:** the static port needs bar-by-bar validation
-   against the Python fixture in MT5 — blocked on XAUUSD M5 history (18.1).
-4. **maxBars=5000** cap may affect long-span structure features — runtime TBD.
-5. **Calendar data** availability in the Strategy Tester — runtime TBD.
-6. **FBS connection stability** under Wine is unproven; the real account
-   authenticated once then dropped. Native Windows may be required for a
-   stable trading-server connection.
+4. **Structure runtime parity:** the static port needs bar-by-bar validation
+   against the Python fixture in MT5 — blocked on a Strategy-Tester run
+   (now unblocked once the user re-runs the tester with build 38.21).
+5. **maxBars=5000** cap may affect long-span structure features — runtime TBD.
+6. **Calendar data** availability in the Strategy Tester — runtime TBD.
+7. **FBS connection stability** under Wine is unproven (connection drops
+   reproducibly); native Windows is required for a stable trading-server
+   connection — but the user IS running the tester on native Windows, so this
+   no longer blocks the EA-load/backtest path.
 
 ## 20. Known limitations
 

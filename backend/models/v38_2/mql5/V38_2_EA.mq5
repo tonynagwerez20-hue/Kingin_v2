@@ -41,11 +41,30 @@
 //|    session/spread filters, news blackout, ATR risk              |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "38.20"
+#property version   "38.21"
 #property copyright "V38.2 — Evolution of V37 Production"
 #include <V38_2_Structure.mqh>
 #include <V38_Calibrator.mqh>
 #include <Trade\Trade.mqh>
+
+//+------------------------------------------------------------------+
+//| EMBEDDED RESOURCES (canonical V38.2 artifacts, byte-for-byte)    |
+//|                                                                   |
+//| The ONNX model and calibrator JSON are embedded directly into the |
+//| compiled V38_2_EA.ex5 via #resource. This makes the EA fully      |
+//| self-contained: it loads identically in the terminal AND in the   |
+//| Strategy Tester agent sandbox, where MQL5\Files is NOT reachable   |
+//| (the tester agent runs in Tester\<hash>\Agent-...\ with its own    |
+//| working directory, so OnnxCreate("file.onnx") / FileOpen fail with |
+//| ERR_FILE_NOT_EXIST=5019). This mirrors the V37 reference, which   |
+//| used #resource + OnnxCreateFromBuffer.                             |
+//|                                                                   |
+//| Resource path "\\Files\\name" is resolved relative to the terminal |
+//| data directory MQL5\ root (leading backslash), so the resource    |
+//| files must be present in MQL5\Files\ at compile time.              |
+//+------------------------------------------------------------------+
+#resource "\\Files\\v38_2_final_model.onnx" as uchar g_onnx_data[]
+#resource "\\Files\\v38_2_calibrator.json"  as uchar g_cal_data[]
 
 //+------------------------------------------------------------------+
 //| Operation modes                                                   |
@@ -684,18 +703,55 @@ int OnInit()
    g_htf.Init(_Symbol, InpHTF, true);
    g_ltf.SetHTF(GetPointer(g_htf));
 
-   // V38.2: Load calibrator
-   if(!g_cal.Load(InpCalibratorFile))
-      Print("V38.2: WARNING — calibrator not loaded, using raw probabilities");
+   // V38.2: Load calibrator. Try the embedded #resource first (works in both
+   // terminal and Strategy Tester sandbox); fall back to MQL5\Files for
+   // manual hot-swap of a calibrator without recompiling.
+   string cal_json = CharArrayToString(g_cal_data, 0, WHOLE_ARRAY, CP_UTF8);
+   if(g_cal.LoadFromString(cal_json))
+     {
+      Print("V38.2: calibrator loaded from embedded resource (", ArraySize(g_cal_data), " bytes)");
+     }
+   else
+     {
+      Print("V38.2: embedded calibrator parse failed; trying file '", InpCalibratorFile, "'");
+      if(!g_cal.Load(InpCalibratorFile))
+         Print("V38.2: WARNING — calibrator not loaded from file OR resource, using raw probabilities");
+     }
 
-   // V38.2: Load ONNX model (50 features, no ZipMap for clean MQL5 arrays)
-   AIHandle = OnnxCreate(InpOnnxFilename, ONNX_DEFAULT);
+   // V38.2: Load ONNX model (50 features, no ZipMap for clean MQL5 arrays).
+   // Use the embedded #resource via OnnxCreateFromBuffer so the model is
+   // available inside the Strategy Tester agent sandbox (where OnnxCreate
+   // with a bare filename fails with ERR_FILE_NOT_EXIST=5019 because the
+   // tester working directory has no MQL5\Files\v38_2_final_model.onnx).
+   // Fall back to OnnxCreate(filename) for terminal-mode hot-swap.
+   Print("V38.2: ONNX resource bytes=", ArraySize(g_onnx_data));
+   if(ArraySize(g_onnx_data) > 0)
+      AIHandle = OnnxCreateFromBuffer(g_onnx_data, ONNX_DEFAULT);
+   else
+      Print("V38.2: ONNX embedded resource is EMPTY");
+
    if(AIHandle == INVALID_HANDLE)
      {
-      Print("V38.2: FAILED to load ONNX model ", InpOnnxFilename,
-            " err=", GetLastError());
+      Print("V38.2: embedded ONNX load failed err=", GetLastError(),
+            "; trying file '", InpOnnxFilename, "'");
+      // Diagnostic: is the file present in MQL5\Files?
+      int fh = FileOpen(InpOnnxFilename, FILE_READ|FILE_BIN);
+      if(fh != INVALID_HANDLE)
+        {
+         Print("V38.2: ONNX file '", InpOnnxFilename, "' found in MQL5\\Files, size=", FileSize(fh));
+         FileClose(fh);
+        }
+      else
+         Print("V38.2: ONNX file '", InpOnnxFilename, "' NOT in MQL5\\Files (err=", GetLastError(), ")");
+      AIHandle = OnnxCreate(InpOnnxFilename, ONNX_DEFAULT);
+     }
+
+   if(AIHandle == INVALID_HANDLE)
+     {
+      Print("V38.2: FAILED to load ONNX model (resource AND file) err=", GetLastError());
       return INIT_FAILED;
      }
+   Print("V38.2: ONNX model loaded handle=", AIHandle);
    // Input: [1, 50] float32, Output: label [1] int64, probabilities [N, 2] float32.
    // MQL5 OnnxSetInputShape/OutputShape take a ulong[] shape array, not variadic.
    ulong inShape[2];  inShape[0]=1;  inShape[1]=V38_2_N_FEATURES;

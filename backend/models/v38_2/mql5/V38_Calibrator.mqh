@@ -28,10 +28,31 @@ public:
       m_loaded=false; m_method="none";
       ArrayResize(m_xThr,0); ArrayResize(m_yThr,0);
       int h=FileOpen(filename, FILE_READ|FILE_TXT|FILE_ANSI);
-      if(h==INVALID_HANDLE) { return false; }
+      if(h==INVALID_HANDLE)
+        {
+         Print("V38 Calibrator: FileOpen FAILED for '", filename, "' err=", GetLastError());
+         return false;
+        }
       string txt="";
       while(!FileIsEnding(h)) txt+=FileReadString(h)+" ";
       FileClose(h);
+      return ParseFromText(txt);
+     }
+
+   // Load calibrator from an in-memory JSON string (e.g. a #resource buffer
+   // converted via CharArrayToString). Used for the Strategy Tester sandbox,
+   // where MQL5\Files is not reachable from the tester agent working directory.
+   bool LoadFromString(const string json)
+     {
+      m_loaded=false; m_method="none";
+      ArrayResize(m_xThr,0); ArrayResize(m_yThr,0);
+      return ParseFromText(json);
+     }
+
+   // Parse the calibrator JSON text already loaded into memory. Shared by
+   // Load() (from file) and LoadFromString() (from embedded #resource).
+   bool ParseFromText(const string txt)
+     {
       if(StringLen(txt)==0) { return false; }
       // method detection (isotonic chosen by canonical frozen calibrator)
       m_method = (StringFind(txt,"\"isotonic\"")>=0 ||
@@ -55,7 +76,7 @@ public:
             m_method="none";
             return false;
            }
-         }
+        }
       else if(m_method=="sigmoid")
         {
          if(!ParseArray(txt, "coef", m_coef))
