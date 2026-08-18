@@ -272,7 +272,7 @@ Strategy Tester and forward testing. No live WR claim is made.
 | G7 | no-lookahead audit | **PASS** (source) |
 | G8 | closed/forming-bar policy | **PASS** (source) |
 | G9 | MQL5 compilation | **PASS** (MetaEditor64 via Wine 10.0; 0 errors/0 warnings; V38_2_EA.ex5 128,472 B; committed 3b2efde) |
-| G10 | initialization test | **BLOCKED** — FBS account 28763853 connected once then dropped (`connection to fbs.com lost`, no auto-reconnect); terminal fell back to MetaQuotes demo. FBS real-account auth unstable under Wine. |
+| G10 | initialization test | **BLOCKED** — FBS account 28763853 authenticates then drops immediately & reproducibly under Wine (`connection to fbs.com lost` at 13:42 and 14:07 after restart+re-login); terminal falls back to MetaQuotes demo. FBS real-account connection cannot be maintained under Wine. |
 | G11 | observation-mode test | **BLOCKED** — requires XAUUSD M5 history, which has no available source in this environment (see 18.1) |
 | G12 | Strategy Tester execution | **BLOCKED** — no XAUUSD M5 history; Strategy Tester panel open + config written but cannot run |
 | G13 | risk engine verified | PASS (source); runtime pending |
@@ -289,12 +289,14 @@ Strategy Tester and forward testing. No live WR claim is made.
 A genuine M5 Strategy-Tester backtest needs a continuous XAUUSD M5 OHLC series.
 No such source exists in this Linux/Wine environment:
 
-1. **FBS live download — connection lost.** Account 28763853 connected to the
-   FBS server once, then the journal logged `connection to fbs.com lost` with no
-   auto-reconnect. Real-account authentication is unstable under Wine 10.0
-   (server resolution / session handling), so the terminal cannot pull fresh
-   XAUUSD history. Adding the symbol to Market Watch also failed repeatedly
-   (GUI coordinate drift under Wine).
+1. **FBS live download — connection lost every attempt.** Account 28763853
+   authenticates against the FBS server then drops immediately, reproducibly,
+   under Wine 10.0 — confirmed twice (journal `connection to fbs.com lost` at
+   13:42 and again at 14:07 after a clean terminal restart + explicit
+   re-login). The real-account trading-server connection cannot be maintained
+   under Wine (handshake/IP-validation/protocol mismatch), so no fresh XAUUSD
+   history can be pulled. Adding the symbol to Market Watch also failed
+   repeatedly (GUI coordinate drift under Wine).
 2. **No raw M5 CSV in the repo.** `data/processed/jetta/XAUUSD_M5.csv` (cited in
    AGENTS.md) is absent from this clone; the only XAUUSD OHLC CSV present is
    H1 (`backend/data/XAUUSDm_H1_*.csv`), which is the HTF, not the M5 execution
