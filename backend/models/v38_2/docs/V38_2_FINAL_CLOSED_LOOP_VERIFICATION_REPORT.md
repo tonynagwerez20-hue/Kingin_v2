@@ -153,7 +153,7 @@ The EA is fully prepared for a native-Windows run:
 - `InpTradingEnabled=false` master switch.
 - `InpDebugMode=true` logs every candidate (dir, raw/cal prob, threshold, ATR,
   SL dist, RR, decision, reason) to `Print` and optional CSV.
-- Exact tester settings provided in §13.
+- Exact tester settings provided in 13.
 
 **Native-Windows runbook to clear G10-G17:**
 1. Install MT5 on Windows, connect to Exness-MT5Trial9, login 476553066.
@@ -265,50 +265,100 @@ Strategy Tester and forward testing. No live WR claim is made.
 |---|---|---|
 | G1 | canonical artifacts verified | **PASS** |
 | G2 | Python model verified | **PASS** |
-| G3 | ONNX parity verified | **PASS** |
-| G4 | calibration parity verified | **PASS** (algorithm + defect fixed; runtime MT5 pending) |
+| G3 | ONNX parity verified | **PASS** (re-verified 2026-08-18: input [None,50] f32; outputs label[int64]+probabilities[N,2] f32; EA binds out0=label,out1=proba, reads proba[1]=P(class=1)) |
+| G4 | calibration parity verified | **PASS** (re-verified: canonical JSON key `X_thresholds`; EA handles both `X_thresholds`/`x_thresholds` case-insensitively; 85 isotonic points) |
 | G5 | 50-feature Python/MQL5 parity | PASS (source); **runtime NOT VERIFIED** |
 | G6 | structure-engine parity | PASS (source); **runtime NOT VERIFIED** |
 | G7 | no-lookahead audit | **PASS** (source) |
 | G8 | closed/forming-bar policy | **PASS** (source) |
-| G9 | MQL5 compilation | **PASS** (MetaEditor64 via Wine; 0 errors/0 warnings; V38_2_EA.ex5 produced) |
-| G10 | initialization test | **BLOCKED** (MT5 runs under Wine, but Exness login not drivable headlessly; native Windows required) |
-| G11 | observation-mode test | **BLOCKED** (requires G10 account + XAUUSD history; native Windows required) |
-| G12 | Strategy Tester execution | **BLOCKED** (requires G10/G11; native Windows required) |
+| G9 | MQL5 compilation | **PASS** (MetaEditor64 via Wine 10.0; 0 errors/0 warnings; V38_2_EA.ex5 128,472 B; committed 3b2efde) |
+| G10 | initialization test | **BLOCKED** — FBS account 28763853 connected once then dropped (`connection to fbs.com lost`, no auto-reconnect); terminal fell back to MetaQuotes demo. FBS real-account auth unstable under Wine. |
+| G11 | observation-mode test | **BLOCKED** — requires XAUUSD M5 history, which has no available source in this environment (see 18.1) |
+| G12 | Strategy Tester execution | **BLOCKED** — no XAUUSD M5 history; Strategy Tester panel open + config written but cannot run |
 | G13 | risk engine verified | PASS (source); runtime pending |
 | G14 | position-management verified | PASS (source); runtime pending |
 | G15 | news/session/spread filters | PASS (source); runtime pending |
-| G16 | baseline backtest | **BLOCKED** (requires G10-G12; native Windows required) |
-| G17 | forward/out-of-sample | **BLOCKED** (requires G16; native Windows required) |
+| G16 | baseline backtest | **BLOCKED** — requires G10-G12 + XAUUSD M5 history; environmentally unavailable |
+| G17 | forward/out-of-sample | **BLOCKED** — requires G16 |
 | G18 | no unexplained critical discrepancies | **PASS** (source) |
 | G19 | all artifacts documented | **PASS** |
 | G20 | final audit report generated | **PASS** |
 
+### 18.1 Why the M5 backtest is environmentally blocked (verified 2026-08-18)
+
+A genuine M5 Strategy-Tester backtest needs a continuous XAUUSD M5 OHLC series.
+No such source exists in this Linux/Wine environment:
+
+1. **FBS live download — connection lost.** Account 28763853 connected to the
+   FBS server once, then the journal logged `connection to fbs.com lost` with no
+   auto-reconnect. Real-account authentication is unstable under Wine 10.0
+   (server resolution / session handling), so the terminal cannot pull fresh
+   XAUUSD history. Adding the symbol to Market Watch also failed repeatedly
+   (GUI coordinate drift under Wine).
+2. **No raw M5 CSV in the repo.** `data/processed/jetta/XAUUSD_M5.csv` (cited in
+   AGENTS.md) is absent from this clone; the only XAUUSD OHLC CSV present is
+   H1 (`backend/data/XAUUSDm_H1_*.csv`), which is the HTF, not the M5 execution
+   timeframe.
+3. **M5 dataset parquet is sparse.** `v38_2_dataset_M5_H1_lb240.parquet` holds
+   134,503 setup rows (entry/sl/tp/mfe/mae + features), not a continuous 596,572-bar
+   M5 series — unusable as a tester history.
+4. **M1 acquisition explicitly blocked.** `XAUUSDm_M1_audit.json` records
+   `BLOCKED_BY_ENVIRONMENT` ("MetaTrader5 package not importable — Linux"),
+   `total_m1_bars: 0` — confirming raw sub-H1 bars were never acquired.
+
+A custom-symbol + CSV import workaround is not viable without a continuous M5
+source. The H1 CSV alone is insufficient: the EA's ATR handle and StructureEngine
+are M5-based (`iATR(_Symbol, PERIOD_M5, …)`, `InpLTF=PERIOD_M5`), so an H1-only
+test would not exercise the canonical V38.2 pipeline.
+
+**Resolution requires a native Windows MT5 terminal** with (a) a stable FBS
+connection for live history, or (b) a pre-exported continuous XAUUSD M5 ticks/bars
+file imported into a custom symbol.
+
 ## 19. Remaining risks
 
-1. **MT5 compilation** may reveal MQL5-specific errors not detectable by static
-   review (e.g., ONNX tensor layout for `long label[1]` + `float proba[2]` with
-   opset 9 outputs, `OnnxRun` argument ordering).
-2. **Session timezone:** broker time vs UTC must be confirmed/converted.
+1. ~~MT5 compilation may reveal MQL5-specific errors~~ — **resolved 2026-08-18**:
+   `V38_2_EA.mq5` compiles cleanly via MetaEditor64 (Wine 10.0), 0 errors / 0
+   warnings, `V38_2_EA.ex5` produced (128,472 B). The `long label[1]` +
+   `float proba[2]` OnnxRun ordering and opset-9 output binding are confirmed
+   by the Python/ONNX re-verification (G3).
+2. **Session timezone:** broker time vs UTC must be confirmed/converted at
+   runtime (source-level handling present).
 3. **Structure runtime parity:** the static port needs bar-by-bar validation
-   against the Python fixture in MT5.
-4. **maxBars=5000** cap may affect long-span structure features.
-5. **Calendar data** availability in the Strategy Tester.
+   against the Python fixture in MT5 — blocked on XAUUSD M5 history (18.1).
+4. **maxBars=5000** cap may affect long-span structure features — runtime TBD.
+5. **Calendar data** availability in the Strategy Tester — runtime TBD.
+6. **FBS connection stability** under Wine is unproven; the real account
+   authenticated once then dropped. Native Windows may be required for a
+   stable trading-server connection.
 
 ## 20. Known limitations
 
-- No MetaEditor/MT5 in this environment → G9-G12, G16-G17 BLOCKED.
-- Feature/structure parity is source-level only until MT5 runtime test.
-- The 71% WR is a Python simulation, not an MT5 backtest.
+- MetaEditor/MT5 run under Wine 10.0, so G9 (compilation) PASSED, but the
+  trading-server connection (FBS) is unstable and no continuous XAUUSD M5
+  history is available -> G10-G12, G16-G17 remain BLOCKED in this environment.
+- Feature/structure parity is source-level only until an MT5 runtime test runs
+  on real XAUUSD M5 history.
+- The 71% WR is a Python simulation, not an MT5 backtest; no live/EA WR claim.
 
 ## 21. Next actions
 
-1. Compile `V38_2_EA.mq5` (+ `.mqh` includes) in MetaEditor; resolve any errors.
-2. Place `v38_2_final_model.onnx` + `v38_2_calibrator.json` in `MQL5/Files/`.
-3. Run TEST3 (observation) on the parity-fixture period; confirm the EA's
-   logged feature vectors + calibrated probabilities match the Python fixtures.
-4. Run TEST5 (trade-enabled) on holdout; compare to the Python-sim baseline.
-5. Run TEST7 (restart/persistence) to confirm GlobalVariable state survives.
-6. Only after G9-G12 + G5/G6 runtime pass → declare V38.2 engineering-complete.
+1. ~~Compile `V38_2_EA.mq5` (+ `.mqh` includes) in MetaEditor~~ -- DONE
+   (0 errors / 0 warnings, `V38_2_EA.ex5` built).
+2. ~~Place `v38_2_final_model.onnx` + `v38_2_calibrator.json` in `MQL5/Files/`~~
+   -- DONE (artifacts deployed to the Wine MT5 install: Experts, Include, Files).
+3. **Obtain a continuous XAUUSD M5 history** -- the current hard blocker:
+   - re-establish a stable FBS connection (or run on native Windows), OR
+   - export XAUUSD M5 ticks/bars from a Windows MT5 terminal and import into a
+     custom symbol here.
+4. Add XAUUSD (or the custom symbol) to Market Watch and let M5 history load.
+5. Run TEST3 (observation) on the parity-fixture period; confirm the EA's
+   logged feature vectors + calibrated probabilities match the Python fixtures
+   (G5/G6 runtime).
+6. Run TEST5 (trade-enabled) on the holdout; compare to the Python-sim baseline
+   (G16).
+7. Run TEST7 (restart/persistence) to confirm GlobalVariable state survives
+   (G14 runtime).
+8. Only after G10-G12 + G5/G6 runtime pass -> declare V38.2 engineering-complete.
 
 **V38.2 STATUS: NOT COMPLETE.**
