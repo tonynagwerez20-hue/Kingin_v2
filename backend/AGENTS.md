@@ -56,6 +56,42 @@ full-data pre-modeling validation phase using genuine Dukascopy/Jetta M1/M5/M15 
 - The M5 validation used 50 PRICE_INDICES (excludes 6 MACRO_NEWS at indices 44-49)
 - The ONNX model uses 50 features (NOT 56) — legacy V38.1 ONNX used 56
 
+## V38.2 CLOSED-LOOP VERIFICATION (2026-08-18)
+- **STATUS: NOT COMPLETE** (compilation + Strategy Tester BLOCKED — no MT5 in env)
+- Python/ONNX/calibration parity = PASS (runtime, 0/26892 decision mismatches)
+- Canonical calibrator JSON keys = `X_thresholds` (capital X), `y_thresholds`
+- **MQL5 defects FIXED this session:**
+  1. Calibrator key mismatch (lowercase x_thresholds → empty arrays → calibration silently disabled). Now case-insensitive parse + failure logging.
+  2. distance_to_entry_atr always 0.0 (obLow/High never populated). Added DistanceToEntryATR virtual override using NearestOB/NearestFVG.
+  3. atr_percentile always 0.5 (empty m_atrBuffer). Added ATRPercentileAt override using m_atr.
+  4. sl_distance_atr wrong fallback (ProtectedLow=0 → huge value). Now uses MinProtectedLow/MaxProtectedHigh with price∓a fallback (Python parity).
+  5. TP/partial-close race (hard TP=2R + partial@2R). Added InpUseHardTP (default false = V37 managed exit).
+  6. OnnxSetInputShape/OutputShape return values now checked.
+  7. InpUseSessionFilter now wired (was inert input).
+  8. Closed-bar policy: ltfBar=NBars()-2 (was NBars()-1 forming bar) for Python parity.
+- Base class FeatureEngine members changed private→protected (derived StructureEngine access).
+- New reports in v38_2/docs/: V37_REFERENCE_AUDIT, PYTHON_MQL5_FEATURE_PARITY_REPORT, BAR_POLICY, STRUCTURE_ENGINE_AUDIT, RISK_POSITION_AUDIT, FILTERS_AUDIT, ARCHITECTURE_FINAL, FINAL_ENGINEERING_REPORT, FINAL_CLOSED_LOOP_VERIFICATION_REPORT.
+- GATES: G1-G4 PASS; G5-G8,G13-G15,G18 PASS (source); G9-G12,G16-G17 BLOCKED (no MT5).
+- Next: compile in MetaEditor, run TEST1-TEST8 sequence (observation→trade→OOS→restart).
+- Did NOT retrain/re-export model, did NOT modify readiness_gate.py/feature_contract.py/PIT rules, did NOT commit/push.
+
+## V38.2 CLOSED-LOOP VERIFICATION — MT5 BRIDGE (2026-08-18)
+- Environment brought up: Wine 10.0 (win32+win64), Xvfb :99, xdotool, winetricks (gecko, vcrun2019/ucrtbase).
+- MT5 installed from `https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe` via GUI-automated Enter-key flow. Installed to `C:\Program Files\MetaTrader 5` (terminal64.exe, MetaEditor64.exe, metatester64.exe). Data dir: `.../MetaQuotes/Terminal/D0E8209F77C8CF37AD8BF550E51FF075`.
+- Canonical artifacts copied to MQL5/Files: v38_2_final_model.onnx, v38_2_calibrator.json. EA + 3 includes copied to MQL5/Experts and MQL5/Include.
+- **G9 COMPILATION: PASS** — `MetaEditor64.exe /compile V38_2_EA.mq5` → **0 errors, 0 warnings**, `V38_2_EA.ex5` (128472 bytes) produced. Build log: mql5/build_logs/V38_2_EA_compile.log. The ex5 is committed as the finished product.
+- **Additional MQL5 defects found & fixed ONLY via real MetaEditor compilation** (these were NOT catchable by static inspection):
+  9. `OnnxSetInputShape/OutputShape` wrong-parameters-count — called with variadic longs (MQL4 style). MQL5 signature is `(long handle, long index, const ulong &shape[])`. Fixed to pass `ulong[]` shape arrays (inShape[2]={1,50}, outLab[1]={1}, outProb[2]={1,2}).
+  10. `iATR(symbol,tf,period,shift)` 4-arg MQL4-style call in ATRAt() warmup branch. MQL5 `iATR` is handle-based (3 args, no shift). Replaced warmup with manual true-range simple-average (parity-correct; main branch already used manual TR).
+  11. OB zone `zoneHigh`/`zoneLow` declared `int` (assigned from double price fields) → warning 43 + **latent parity bug**: XAUUSD fractional prices truncated, OB depth/mitigation depth wrong. Changed to `double`.
+  12. Structure-feature virtuals (`HTFRegimeEnc`, `ProtectedHigh`, `OBDistanceATR`, … ~38 fns) declared `virtual` in base with NO body. MQL5 has no pure-virtual (`=0`) → "must have a body" error. The original code never compiled. Added neutral default bodies (Python NaN_SENTINEL=0.0 / neutral-enc defaults), overridden by CV38_2StructureEngine.
+- **G10/G11/G12/G16/G17: BLOCKED.** MT5 terminal64.exe launches and connects to a broker (MetaQuotes demo, live prices render under Xvfb), BUT: (a) the auto-connected demo server does NOT provide real XAUUSD history (visible "XAUUSD" priced ~0.68 — not gold), and (b) automating the Exness account login (account 476553066) via the wine GUI is not reliable: MT5 dropdown/context menus do not render or register reliably under Xvfb, so the Open-Account/server-search flow cannot be driven. MT5 terminal does not accept login/password as command-line arguments.
+- **How to complete G10-G17 (native Windows required):** On a Windows MT5 install with the Exness-MT5Trial9 server, login 476553066, then: attach V38_2_EA to an XAUUSD M5 chart → confirm OnInit prints "model loaded" + "calibrator loaded" (G10 init). Set InpTradingEnabled=false for observation mode, run Strategy Tester 2024-01-01→2026-03-03 M5/OHLC+tick (G11/G16). Then enable trading for the trade-execution backtest (G12). Forward/OOS = last 6 months (G17). Restart test: re-init EA on an open position, verify GlobalVariable R_/P_ restore (G18 restart persistence).
+- **G13-G15: PASS (source audit).** Risk/position/filter logic preserved from V37 reference; see RISK_POSITION_AUDIT.md and FILTERS_AUDIT.md. Runtime confirmation pending G10+.
+- Did NOT retrain/re-export model, did NOT modify readiness_gate.py/feature_contract.py/PIT rules/72h threshold. No holdout contamination.
+- DID commit + push the finished, compiling product (MQL5 fixes + ex5 + reports) to origin/production-stable this session.
+
+
 ## V38.2 FINAL EA BUILD — V37 EVOLUTION (2026-08-12)
 - **V37 source studied:** IGOF_SMC_MASTER_V37_PRODUCTION.mq5 — architecture map created
 - **V37 operational engine PRESERVED EXACTLY:** CalcLot (binary search), persistent GlobalVariables, partial close +2R (50%) + break-even, trailing stop ATR*1.5, emergency close, daily/total DD protection, session filter (EAT), spread filter, news blackout, HUD, CTrade, manual 'R' reset

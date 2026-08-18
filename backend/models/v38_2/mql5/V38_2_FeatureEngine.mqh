@@ -111,7 +111,7 @@
 //+------------------------------------------------------------------+
 class CV38_2FeatureEngine
   {
-private:
+protected:
    double            m_atrBuffer[];
    int               m_atrPeriod;
    int               m_atrPctLookback;
@@ -140,6 +140,8 @@ public:
    virtual double    LastEventAgeBars(int ltfBar);
    virtual double    ProtectedHigh(int ltfBar);
    virtual double    ProtectedLow(int ltfBar);
+   virtual double    MinProtectedLow(int ltfBar, double fallback);
+   virtual double    MaxProtectedHigh(int ltfBar, double fallback);
    virtual double    MultiLegAligned(int ltfBar);
    virtual double    LegExtensionATR(int ltfBar);
    virtual double    StructureStrength(int ltfBar);
@@ -170,8 +172,14 @@ public:
    virtual double    PDLegSpanATR(int ltfBar);
    virtual double    HTFAlignmentEnc(int ltfBar, string direction);
    virtual double    LTFAlignmentEnc(int ltfBar, string direction);
-   virtual double    DistanceToEntryATR(double price, double obLow, double obHigh,
-                                         double fvgLow, double fvgHigh, double atrVal);
+   // distance to entry zone (nearest OB then FVG edge). Mirrors Python
+   // build_feature_vector v[52] (target = nearest OB/FVG edge or price).
+   virtual double    DistanceToEntryATR(int ltfBar, double price, double atrVal);
+   // Engine-resolved price/ATR/percentile so BuildVector does not depend on
+   // the live series indexing (the StructureEngine uses its own buffered bars).
+   virtual double    PriceAt(int ltfBar);
+   virtual double    ATRValAt(int ltfBar);
+   virtual double    ATRPercentileAt(int ltfBar);
    // Assemble the 50-vector (PRICE_INDICES only — no MACRO_NEWS)
    bool              BuildVector(int ltfBar, int htfBar, datetime t,
                                   string direction, double &outVector[]);
@@ -189,21 +197,71 @@ void CV38_2FeatureEngine::Init(int atrPeriod=14, int atrPctLookback=200)
    m_sessionStarts[4]=21; m_sessionEnds[4]=24;  // off
   }
 
+//--- Default bodies for structure-feature virtuals.
+//    MQL5 has no pure-virtual (=0); the base must provide a body for every
+//    declared function. These return neutral defaults (matching Python's
+//    NaN_SENTINEL=0.0 / neutral-enc values) and are overridden by
+//    CV38_2StructureEngine when a real structure engine is attached.
+double CV38_2FeatureEngine::HTFRegimeEnc(int htfBar)            { return 1.0; }
+double CV38_2FeatureEngine::LTFRegimeEnc(int ltfBar)           { return 1.0; }
+double CV38_2FeatureEngine::BOSCountRecent(int ltfBar)         { return 0.0; }
+double CV38_2FeatureEngine::CHOCHCountRecent(int ltfBar)       { return 0.0; }
+double CV38_2FeatureEngine::LastEventDirEnc(int ltfBar)       { return 0.0; }
+double CV38_2FeatureEngine::LastEventDispATR(int ltfBar)       { return 0.0; }
+double CV38_2FeatureEngine::LastEventAgeBars(int ltfBar)       { return 0.0; }
+double CV38_2FeatureEngine::ProtectedHigh(int ltfBar)          { return 0.0; }
+double CV38_2FeatureEngine::ProtectedLow(int ltfBar)           { return 0.0; }
+double CV38_2FeatureEngine::MultiLegAligned(int ltfBar)        { return 0.0; }
+double CV38_2FeatureEngine::LegExtensionATR(int ltfBar)        { return 0.0; }
+double CV38_2FeatureEngine::StructureStrength(int ltfBar)       { return 0.0; }
+double CV38_2FeatureEngine::NearestLiquidityDistATR(int ltfBar, double price, double atrVal) { return 0.0; }
+double CV38_2FeatureEngine::NearestLiquiditySideEnc(int ltfBar, double price, double atrVal)  { return 0.0; }
+double CV38_2FeatureEngine::LiquiditySwept(int ltfBar)         { return 0.0; }
+double CV38_2FeatureEngine::SweepDepthATR(int ltfBar)          { return 0.0; }
+double CV38_2FeatureEngine::PostSweepReactionATR(int ltfBar)  { return 0.0; }
+double CV38_2FeatureEngine::EQHEQLPresent(int ltfBar)          { return 0.0; }
+double CV38_2FeatureEngine::InducementPresent(int ltfBar)      { return 0.0; }
+double CV38_2FeatureEngine::OBPresent(int ltfBar)              { return 0.0; }
+double CV38_2FeatureEngine::OBDirectionEnc(int ltfBar)         { return 0.0; }
+double CV38_2FeatureEngine::OBStrength(int ltfBar)             { return 0.0; }
+double CV38_2FeatureEngine::OBDistanceATR(int ltfBar, double price, double atrVal) { return 0.0; }
+double CV38_2FeatureEngine::OBAgeBars(int ltfBar)               { return 0.0; }
+double CV38_2FeatureEngine::OBMitigationCount(int ltfBar)      { return 0.0; }
+double CV38_2FeatureEngine::OBFreshnessEnc(int ltfBar)         { return 1.0; }
+double CV38_2FeatureEngine::OBMitigationDepth(int ltfBar)     { return 0.0; }
+double CV38_2FeatureEngine::FVGPresent(int ltfBar)             { return 0.0; }
+double CV38_2FeatureEngine::FVGDirectionEnc(int ltfBar)       { return 0.0; }
+double CV38_2FeatureEngine::FVGSizeATR(int ltfBar)            { return 0.0; }
+double CV38_2FeatureEngine::FVGAgeBars(int ltfBar)            { return 0.0; }
+double CV38_2FeatureEngine::FVGFillPct(int ltfBar)            { return 0.0; }
+double CV38_2FeatureEngine::FVGFreshnessEnc(int ltfBar)      { return 1.0; }
+double CV38_2FeatureEngine::PDPosition(int ltfBar)            { return 0.5; }
+double CV38_2FeatureEngine::PDLabelEnc(int ltfBar)            { return 1.0; }
+double CV38_2FeatureEngine::PDDistanceFromEq(int ltfBar)      { return 0.0; }
+double CV38_2FeatureEngine::PDLegSpanATR(int ltfBar)          { return 0.0; }
+// HTFAlignmentEnc / LTFAlignmentEnc have real bodies further below.
+
 double CV38_2FeatureEngine::ATRAt(const string symbol, ENUM_TIMEFRAMES tf, int barIndex)
   {
    int shift = (int)Bars(symbol, tf) - 1 - barIndex;
-   if(shift < m_atrPeriod) return(iATR(symbol, tf, m_atrPeriod, shift));
+   int avail = shift + 1; // bars available up to this shift (inclusive)
+   if(avail < 2) return 0.0;
+   // Wilder smoothing; for the warmup portion (or when fewer than period bars
+   // are available) fall back to a simple average of true range. MQL5 iATR is a
+   // handle-based indicator (no shift arg), so compute TR manually here.
+   int n = (avail < m_atrPeriod) ? avail : m_atrPeriod;
+   if(n < 1) return 0.0;
    double sum=0.0;
-   for(int k=0;k<m_atrPeriod;k++)
+   for(int k=0;k<n;k++)
      {
       int s=shift-k;
       double high=iHigh(symbol,tf,s);
       double low=iLow(symbol,tf,s);
-      double prevClose=iClose(symbol,tf,s+1);
+      double prevClose=(s+1 < (int)Bars(symbol,tf)) ? iClose(symbol,tf,s+1) : low;
       double tr=MathMax(high-low, MathMax(MathAbs(high-prevClose), MathAbs(low-prevClose)));
       sum+=tr;
      }
-   return sum/m_atrPeriod;
+   return sum/n;
   }
 
 double CV38_2FeatureEngine::ATRPercentile(const double &atrSeries[], int barIndex, int lookback)
@@ -284,16 +342,38 @@ double CV38_2FeatureEngine::LTFAlignmentEnc(int ltfBar, string direction)
    return -1.0;
   }
 
-double CV38_2FeatureEngine::DistanceToEntryATR(double price, double obLow, double obHigh,
-                                                double fvgLow, double fvgHigh, double atrVal)
+double CV38_2FeatureEngine::DistanceToEntryATR(int ltfBar, double price, double atrVal)
   {
+   // Base shim: no OB/FVG object available → 0.0 (matches Python
+   // when ob_idx and fvg_idx are both None). Overridden in StructureEngine.
    if(atrVal<=0) return 0.0;
-   double target=price;
-   if(obLow>0 || obHigh>0)
-      target = (price>obHigh)? obLow : ((price<obLow)? obHigh : price);
-   else if(fvgLow>0 || fvgHigh>0)
-      target = (price>fvgHigh)? fvgLow : ((price<fvgLow)? fvgHigh : price);
-   return MathAbs(target-price)/atrVal;
+   return 0.0;
+  }
+
+//--- Base shims for engine-resolved price/ATR/percentile/protected levels.
+//    StructureEngine overrides these to use its own buffered bar arrays so
+//    BuildVector never depends on live-series shift indexing.
+double CV38_2FeatureEngine::PriceAt(int ltfBar)
+  {
+   return iClose(_Symbol, PERIOD_CURRENT, (int)Bars(_Symbol,0)-1-ltfBar);
+  }
+double CV38_2FeatureEngine::ATRValAt(int ltfBar)
+  {
+   return ATRAt(_Symbol, PERIOD_CURRENT, ltfBar);
+  }
+double CV38_2FeatureEngine::ATRPercentileAt(int ltfBar)
+  {
+   return ATRPercentile(m_atrBuffer, ltfBar, m_atrPctLookback);
+  }
+double CV38_2FeatureEngine::MinProtectedLow(int ltfBar, double fallback)
+  {
+   double v=ProtectedLow(ltfBar);
+   return (v!=0.0)? v : fallback;
+  }
+double CV38_2FeatureEngine::MaxProtectedHigh(int ltfBar, double fallback)
+  {
+   double v=ProtectedHigh(ltfBar);
+   return (v!=0.0)? v : fallback;
   }
 
 //+------------------------------------------------------------------+
@@ -305,10 +385,10 @@ bool CV38_2FeatureEngine::BuildVector(int ltfBar, int htfBar, datetime t,
                                        string direction, double &outVector[])
   {
    if(ArraySize(outVector)<V38_2_N_FEATURES) return false;
-   double price=iClose(_Symbol, PERIOD_CURRENT, (int)Bars(_Symbol,0)-1-ltfBar);
-   double atrVal=ATRAt(_Symbol, PERIOD_CURRENT, ltfBar);
+   // Engine-resolved price/ATR (StructureEngine uses its buffered bars)
+   double price=PriceAt(ltfBar);
+   double atrVal=ATRValAt(ltfBar);
    if(atrVal<=0) atrVal=1.0;
-   double obLow=0,obHigh=0,fvgLow=0,fvgHigh=0;
 
    outVector[O_HTF_REGIME_ENC]=HTFRegimeEnc(htfBar);
    outVector[O_LTF_REGIME_ENC]=LTFRegimeEnc(ltfBar);
@@ -348,7 +428,8 @@ bool CV38_2FeatureEngine::BuildVector(int ltfBar, int htfBar, datetime t,
    outVector[O_PD_DISTANCE_FROM_EQ]=PDDistanceFromEq(ltfBar);
    outVector[O_PD_LEG_SPAN_ATR]=PDLegSpanATR(ltfBar);
    outVector[O_ATR]=atrVal;
-   outVector[O_ATR_PERCENTILE]=ATRPercentile(m_atrBuffer, ltfBar, m_atrPctLookback);
+   outVector[O_ATR_PERCENTILE]=ATRPercentileAt(ltfBar);
+   // daily range uses the same engine bar (parity with Python high_arr[b]/low_arr[b])
    outVector[O_DAILY_RANGE_PCT]=DailyRangePct(iHigh(_Symbol,0,(int)Bars(_Symbol,0)-1-ltfBar),
                                               iLow(_Symbol,0,(int)Bars(_Symbol,0)-1-ltfBar), atrVal);
    outVector[O_VOLATILITY_REGIME_ENC]=(double)VolatilityRegime(outVector[O_ATR_PERCENTILE]);
@@ -358,10 +439,14 @@ bool CV38_2FeatureEngine::BuildVector(int ltfBar, int htfBar, datetime t,
    // NOTE: NO MACRO_NEWS features (contract indices 44-49 excluded)
    outVector[O_HTF_ALIGNMENT_ENC]=HTFAlignmentEnc(ltfBar,direction);
    outVector[O_LTF_ALIGNMENT_ENC]=LTFAlignmentEnc(ltfBar,direction);
-   outVector[O_DISTANCE_TO_ENTRY_ATR]=DistanceToEntryATR(price,obLow,obHigh,fvgLow,fvgHigh,atrVal);
-   double protLow = ProtectedLow(ltfBar);
-   double protHigh = ProtectedHigh(ltfBar);
-   double refExtreme = (direction=="bullish") ? protLow : protHigh;
+   outVector[O_DISTANCE_TO_ENTRY_ATR]=DistanceToEntryATR(ltfBar,price,atrVal);
+   // SL distance mirrors Python build_feature_vector v[53]:
+   //   bullish: ref = min_protected_low(bar, price-a); sl_d = max(a*0.5, price-ref)
+   //   bearish: ref = max_protected_high(bar, price+a); sl_d = max(a*0.5, ref-price)
+   // The Min/Max protected-level helpers fall back to (price∓a) when no level
+   // exists, exactly like the Python fallback.
+   double refExtreme = (direction=="bullish") ? MinProtectedLow(ltfBar, price-atrVal)
+                                              : MaxProtectedHigh(ltfBar, price+atrVal);
    outVector[O_SL_DISTANCE_ATR]=SLDistanceATR(price, refExtreme, atrVal, direction=="bullish");
    outVector[O_TP_DISTANCE_ATR]=TPDistanceATR(outVector[O_SL_DISTANCE_ATR], V38_2_LABEL_TP_R);
    outVector[O_AVAILABLE_RR]=AvailableRR(outVector[O_SL_DISTANCE_ATR], outVector[O_TP_DISTANCE_ATR]);

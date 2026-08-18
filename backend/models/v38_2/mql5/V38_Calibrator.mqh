@@ -25,25 +25,47 @@ public:
 
    bool Load(const string filename)
      {
+      m_loaded=false; m_method="none";
+      ArrayResize(m_xThr,0); ArrayResize(m_yThr,0);
       int h=FileOpen(filename, FILE_READ|FILE_TXT|FILE_ANSI);
-      if(h==INVALID_HANDLE) { m_method="none"; m_loaded=false; return false; }
+      if(h==INVALID_HANDLE) { return false; }
       string txt="";
       while(!FileIsEnding(h)) txt+=FileReadString(h)+" ";
       FileClose(h);
-      // minimal JSON parse (keys we care about)
-      m_method = (StringFind(txt,"\"isotonic\"")>=0) ? "isotonic" :
-                 ((StringFind(txt,"\"sigmoid\"")>=0) ? "sigmoid" : "none");
+      if(StringLen(txt)==0) { return false; }
+      // method detection (isotonic chosen by canonical frozen calibrator)
+      m_method = (StringFind(txt,"\"isotonic\"")>=0 ||
+                  StringFind(txt,"\"X_thresholds\"")>=0 ||
+                  StringFind(txt,"\"x_thresholds\"")>=0) ? "isotonic" :
+                 ((StringFind(txt,"\"sigmoid\"")>=0 ||
+                   StringFind(txt,"\"coef\"")>=0) ? "sigmoid" : "none");
       if(m_method=="isotonic")
         {
-         ParseArray(txt, "\"x_thresholds\"", m_xThr);
-         ParseArray(txt, "\"y_thresholds\"", m_yThr);
-        }
+         // Canonical frozen JSON uses capital "X_thresholds" and "y_thresholds".
+         // Accept both capitalizations (case-insensitive key search) so the
+         // calibrator never silently fails on a key-spelling mismatch.
+         if(!ParseArray(txt, "X_thresholds", m_xThr))
+            ParseArray(txt, "x_thresholds", m_xThr);
+         if(!ParseArray(txt, "y_thresholds", m_yThr))
+            ParseArray(txt, "Y_thresholds", m_yThr);
+         if(ArraySize(m_xThr)==0 || ArraySize(m_yThr)==0)
+           {
+            Print("V38 Calibrator: isotonic arrays EMPTY after parse (key mismatch?). "
+                  "xThr=", ArraySize(m_xThr), " yThr=", ArraySize(m_yThr));
+            m_method="none";
+            return false;
+           }
+         }
       else if(m_method=="sigmoid")
         {
-         ParseArray(txt, "\"coef\"", m_coef);
-         ParseArray(txt, "\"intercept\"", m_intercept);
+         if(!ParseArray(txt, "coef", m_coef))
+            Print("V38 Calibrator: sigmoid coef array missing");
+         if(!ParseArray(txt, "intercept", m_intercept))
+            Print("V38 Calibrator: sigmoid intercept array missing");
         }
       m_loaded=true;
+      Print("V38 Calibrator: loaded method=", m_method,
+            " points=", ArraySize(m_xThr));
       return true;
      }
 
@@ -90,25 +112,49 @@ private:
       return 1.0/(1.0+MathExp(-z));
      }
 
-   // crude JSON array extractor for numeric arrays
-   void ParseArray(const string txt, const string key, double &arr[])
+   // case-insensitive JSON numeric-array extractor. Returns true on success.
+   // Matches the quoted key `"key"` (case-insensitive), then the following
+   // `[ ... ]`. Robust to the canonical capitalization (X_thresholds) and
+   // the export.py lower-case variant (x_thresholds).
+   bool ParseArray(const string txt, const string key, double &arr[])
      {
-      int kpos=StringFind(txt, key);
-      if(kpos<0) { ArrayResize(arr,0); return; }
+      int kpos=FindKeyCI(txt, key);
+      if(kpos<0) { ArrayResize(arr,0); return false; }
       int colon=StringFind(txt, ":", kpos);
+      if(colon<0) { ArrayResize(arr,0); return false; }
       int lb=StringFind(txt, "[", colon);
+      if(lb<0) { ArrayResize(arr,0); return false; }
       int rb=StringFind(txt, "]", lb);
-      if(colon<0||lb<0||rb<0) { ArrayResize(arr,0); return; }
+      if(rb<0) { ArrayResize(arr,0); return false; }
       string body=StringSubstr(txt, lb+1, rb-lb-1);
       string parts[];
       int n=StringSplit(body, ',', parts);
+      if(n<=0) { ArrayResize(arr,0); return false; }
       ArrayResize(arr, n);
       for(int i=0;i<n;i++)
         {
          string s=parts[i];
          StringTrimLeft(s); StringTrimRight(s);
+         // strip trailing/leading quotes if a string slipped in
+         if(StringLen(s)>0 && StringGetCharacter(s,0)=='\"')
+            s=StringSubstr(s,1);
+         int L=StringLen(s);
+         if(L>0 && StringGetCharacter(s,L-1)=='\"')
+            s=StringSubstr(s,0,L-1);
          arr[i]=StringToDouble(s);
         }
+      return (ArraySize(arr)>0);
+     }
+
+   // Find the position of the quoted key `"<key>"` case-insensitively.
+   int FindKeyCI(const string txt, const string key)
+     {
+      string lowerTxt=txt;
+      StringToLower(lowerTxt);
+      string quoted="\""+key+"\"";
+      string lowerQ=quoted;
+      StringToLower(lowerQ);
+      return StringFind(lowerTxt, lowerQ);
      }
   };
 

@@ -107,6 +107,9 @@ input double          InpProbThreshold    = 0.50;      // Calibrated probability
 input double          InpMinRR            = 1.0;       // Min reward:risk from features
 input bool            InpUseATR_SL_FromFeatures = false; // Use SL from features (true) or V37 ATR*mult (false)
 
+input group "=== EXIT POLICY (TP / PARTIAL-CLOSE) ==="
+input bool            InpUseHardTP        = false;     // Hard TP at +2R (true) or V37 managed exit (false)
+
 input group "=== ONNX / CALIBRATOR ==="
 input string          InpOnnxFilename     = "v38_2_final_model.onnx";
 input string          InpCalibratorFile   = "v38_2_calibrator.json";
@@ -353,8 +356,9 @@ void Manage()
       double fav = pt == POSITION_TYPE_BUY ? cp - op : op - cp;
       bool part = G(K("P_" + (string)id), 0) > 0.5;
 
-      // Partial close at +PartialRR
-      if(!part && fav >= r * InpPartialRR)
+      // Partial close at +PartialRR. Skipped when a hard TP at the same level
+      // is active (broker TP fires first — see V38_2_V37_REFERENCE_AUDIT §5).
+      if(!InpUseHardTP && !part && fav >= r * InpPartialRR)
         {
          double cv = VolDown(vol * InpPartialFraction);
          if(cv > 0 && cv < vol && Reduce(t, cv))
@@ -558,7 +562,14 @@ bool OpenTrade(ENUM_ORDER_TYPE type, double slDistPrice, double calProb)
    // Ensure SL distance respects broker minimum (V37 pattern)
    double dist = MathMax(slDistPrice, MathMax(minStop, freeze) + 2 * _Point);
    double sl = NormalizeDouble(type == ORDER_TYPE_BUY ? price - dist : price + dist, _Digits);
-   double tp = NormalizeDouble(type == ORDER_TYPE_BUY ? price + 2 * dist : price - 2 * dist, _Digits);
+   // EXIT POLICY:
+   //  InpUseHardTP=false (CANONICAL, V37-faithful): tp=0, exit managed by
+   //    Manage() partial-close at +2R + break-even + ATR trailing.
+   //  InpUseHardTP=true: hard TP at +2R; partial-close at +2R is then skipped
+   //    (it would never fire before the broker TP). See V38_2_V37_REFERENCE_AUDIT §5.
+   double tp = 0;
+   if(InpUseHardTP)
+      tp = NormalizeDouble(type == ORDER_TYPE_BUY ? price + 2 * dist : price - 2 * dist, _Digits);
 
    double lot;
    if(!CalcLot(type, price, sl, lot))
@@ -571,8 +582,8 @@ bool OpenTrade(ENUM_ORDER_TYPE type, double slDistPrice, double calProb)
    Trade.SetDeviationInPoints(InpDeviationPoints);
    Trade.SetTypeFillingBySymbol(_Symbol);
 
-   // V37 opens with SL=sl, tp=0 (no TP, uses partial+trailing)
-   // V38.2 sets TP=2R to match label definition; partial close still triggers at +2R
+   // V37 opens with SL=sl, tp=0 (no hard TP, managed exit).
+   // V38.2 honours InpUseHardTP for the +2R hard-TP variant.
    if(!Trade.PositionOpen(_Symbol, type, lot, 0, sl, tp, "V38_2"))
       return false;
    if(!TradeOK()) return false;
@@ -685,10 +696,29 @@ int OnInit()
             " err=", GetLastError());
       return INIT_FAILED;
      }
-   // Input: [1, 50] float32, Output: label [1] int64, probabilities [N, 2] float32
-   OnnxSetInputShape(AIHandle, 0, 1, V38_2_N_FEATURES);
-   OnnxSetOutputShape(AIHandle, 0, 1, 1);      // label
-   OnnxSetOutputShape(AIHandle, 1, 1, 2);      // probabilities [N, 2]
+   // Input: [1, 50] float32, Output: label [1] int64, probabilities [N, 2] float32.
+   // MQL5 OnnxSetInputShape/OutputShape take a ulong[] shape array, not variadic.
+   ulong inShape[2];  inShape[0]=1;  inShape[1]=V38_2_N_FEATURES;
+   ulong outLab[1];   outLab[0]=1;
+   ulong outProb[2];  outProb[0]=1;  outProb[1]=2;
+   if(!OnnxSetInputShape(AIHandle, 0, inShape))
+     {
+      Print("V38.2: OnnxSetInputShape FAILED err=", GetLastError());
+      OnnxRelease(AIHandle); AIHandle = INVALID_HANDLE;
+      return INIT_FAILED;
+     }
+   if(!OnnxSetOutputShape(AIHandle, 0, outLab))      // label [1]
+     {
+      Print("V38.2: OnnxSetOutputShape(label) FAILED err=", GetLastError());
+      OnnxRelease(AIHandle); AIHandle = INVALID_HANDLE;
+      return INIT_FAILED;
+     }
+   if(!OnnxSetOutputShape(AIHandle, 1, outProb))     // probabilities [1, 2]
+     {
+      Print("V38.2: OnnxSetOutputShape(proba) FAILED err=", GetLastError());
+      OnnxRelease(AIHandle); AIHandle = INVALID_HANDLE;
+      return INIT_FAILED;
+     }
 
    // V37: Configure trade object
    Trade.SetExpertMagicNumber(InpMagic);
@@ -750,7 +780,7 @@ void OnTick()
      }
 
    // V37: Session filter
-   if(!SessionEAT())
+   if(InpUseSessionFilter && !SessionEAT())
      { S.status = "VETO: SESSION"; HUD(); return; }
 
    // V37: Spread filter
@@ -782,7 +812,10 @@ void OnTick()
 
    // V38.2: Update structure data
    UpdateStructureData();
-   int ltfBar = g_ltf.NBars() - 1;
+   // Evaluate the LAST CLOSED bar (Python parity: decision at close of bar b,
+   // which is the bar that just closed when bar b+1 opens). NBars()-1 is the
+   // forming bar; NBars()-2 is the most recent fully-closed bar.
+   int ltfBar = g_ltf.NBars() - 2;
    if(ltfBar < 50) { S.status = "WARMING UP"; HUD(); return; }
 
    double atrVal = g_ltf.ATRAtIdx(ltfBar);

@@ -296,11 +296,17 @@ public:
    virtual double    PDLabelEnc(int ltfBar);
    virtual double    PDDistanceFromEq(int ltfBar);
    virtual double    PDLegSpanATR(int ltfBar);
+   // Overrides for engine-resolved price/ATR/percentile/entry-distance using
+   // the StructureEngine's own buffered bar arrays (parity with Python).
+   virtual double    DistanceToEntryATR(int ltfBar, double price, double atrVal);
+   virtual double    PriceAt(int ltfBar);
+   virtual double    ATRValAt(int ltfBar);
+   virtual double    ATRPercentileAt(int ltfBar);
+   virtual double    MinProtectedLow(int ltfBar, double fallback);
+   virtual double    MaxProtectedHigh(int ltfBar, double fallback);
 
    // Setup detection (mirrors detect_and_build_m5 candidate checks)
    bool              IsCandidateSetup(int bar, string direction);
-   double            MinProtectedLow(int bar, double fallback);
-   double            MaxProtectedHigh(int bar, double fallback);
 
 private:
    void              DetectSwings();
@@ -768,8 +774,8 @@ void CV38_2StructureEngine::DetectOBs()
 
    // Track mitigation forward (only new bars since last update)
    int ageLimit = V38_2_OB_MAX_AGE_BARS;
-   int zoneHigh = m_obs[o].high;
-   int zoneLow = m_obs[o].low;
+   double zoneHigh = m_obs[o].high;
+   double zoneLow = m_obs[o].low;
    double depth = zoneHigh - zoneLow;
    if(depth <= 0)
      { m_obs[o].lifecycle = "invalidated"; m_obs[o].invalidated = true; return; }
@@ -1908,6 +1914,64 @@ bool CV38_2StructureEngine::IsCandidateSetup(int bar, string direction)
    if(score < V38_2_MIN_SETUP_QUALITY) return false;
 
    return true;
+  }
+
+//+------------------------------------------------------------------+
+//| Engine-resolved overrides (parity with Python build_feature_vector)|
+//+------------------------------------------------------------------+
+double CV38_2StructureEngine::PriceAt(int ltfBar)
+  {
+   return (ltfBar >= 0 && ltfBar < m_nBars) ? m_close[ltfBar] : 0.0;
+  }
+
+double CV38_2StructureEngine::ATRValAt(int ltfBar)
+  {
+   return ComputeATRVal(ltfBar);
+  }
+
+double CV38_2StructureEngine::ATRPercentileAt(int ltfBar)
+  {
+   if(ltfBar < 0 || ltfBar >= m_nBars) return 0.5;
+   int lb = m_atrPctLookback;
+   int lo = (ltfBar - lb > 0) ? ltfBar - lb : 0;
+   double cur = m_atr[ltfBar];
+   if(cur != cur) return 0.5; // NaN guard
+   int count = 0, total = 0;
+   for(int i = lo; i <= ltfBar && i < m_nBars; i++)
+     {
+      double v = m_atr[i];
+      if(v != v) continue; // skip NaN
+      total++;
+      if(v <= cur) count++;
+     }
+   return (total > 0) ? (double)count / total : 0.5;
+  }
+
+// Mirrors Python v[52]: target = nearest OB edge (or FVG edge), then |target-price|/a.
+double CV38_2StructureEngine::DistanceToEntryATR(int ltfBar, double price, double atrVal)
+  {
+   if(atrVal <= 0) return 0.0;
+   double a = (atrVal > 0) ? atrVal : ComputeATRVal(ltfBar);
+   if(a <= 0) return 0.0;
+   int obIdx; NearestOB(ltfBar, price, a, obIdx);
+   if(obIdx >= 0)
+     {
+      double target;
+      if(price > m_obs[obIdx].upper) target = m_obs[obIdx].lower;
+      else if(price < m_obs[obIdx].lower) target = m_obs[obIdx].upper;
+      else target = price;
+      return MathAbs(target - price) / a;
+     }
+   int fvgIdx = NearestFVG(ltfBar, price, a);
+   if(fvgIdx >= 0)
+     {
+      double target;
+      if(price > m_fvgs[fvgIdx].upper) target = m_fvgs[fvgIdx].lower;
+      else if(price < m_fvgs[fvgIdx].lower) target = m_fvgs[fvgIdx].upper;
+      else target = price;
+      return MathAbs(target - price) / a;
+     }
+   return 0.0;
   }
 
 #endif // __V38_2_STRUCTURE_MQH__
