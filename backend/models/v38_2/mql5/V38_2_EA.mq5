@@ -41,7 +41,7 @@
 //|    session/spread filters, news blackout, ATR risk              |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "38.21"
+#property version   "38.22"
 #property copyright "V38.2 — Evolution of V37 Production"
 #include <V38_2_Structure.mqh>
 #include <V38_Calibrator.mqh>
@@ -545,6 +545,12 @@ bool PredictWin(const double &feat[], double &rawProb, double &calProb)
   {
    rawProb = 0; calProb = 0;
    if(AIHandle == INVALID_HANDLE) return false;
+   // Fail-closed: never emit a raw probability in place of a calibrated one.
+   if(!g_cal.IsLoaded())
+     {
+      Print("V38.2: calibrator not loaded — inference refused (fail-closed)");
+      return false;
+     }
 
    float in[];
    ArrayResize(in, V38_2_N_FEATURES);
@@ -561,7 +567,61 @@ bool PredictWin(const double &feat[], double &rawProb, double &calProb)
      }
 
    rawProb = (double)proba[1]; // P(class=1) = P(TP hit before SL)
+   if(!MathIsValidNumber(rawProb) || rawProb < 0.0 || rawProb > 1.0)
+     {
+      Print("V38.2: invalid raw probability ", rawProb, " (fail-closed)");
+      return false;
+     }
    calProb = g_cal.Apply(rawProb);
+   if(!MathIsValidNumber(calProb) || calProb < 0.0 || calProb > 1.0)
+     {
+      Print("V38.2: invalid calibrated probability ", calProb, " (fail-closed)");
+      return false;
+     }
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//| V38.2 MODEL SELF-TEST (fail-closed)                               |
+//| Verifies the full chain once at init, before any trading logic:   |
+//|  1. model handle valid (loaded)                                   |
+//|  2-5. input/output shape+type accepted (done in OnInit before     |
+//|       this call — reaching here means all four Set*Shape passed)  |
+//|  6. ONNX inference succeeds                                       |
+//|  7-8. raw probability finite and within [0,1]                     |
+//|  9. calibrator loaded (isotonic)                                  |
+//| 10-11. calibrated probability finite and within [0,1]             |
+//| Probe vector: all zeros — the PIT-blocked/neutral value used by   |
+//| the canonical Python pipeline (NaN_SENTINEL=0.0).                 |
+//+------------------------------------------------------------------+
+bool ModelSelfTest()
+  {
+   if(AIHandle == INVALID_HANDLE)
+     {
+      Print("V38.2 self-test: model handle invalid");
+      return false;
+     }
+   if(V38_2_N_FEATURES != 50)
+     {
+      Print("V38.2 self-test: feature count ", V38_2_N_FEATURES, " != 50");
+      return false;
+     }
+   if(!g_cal.IsLoaded() || g_cal.Method() != "isotonic")
+     {
+      Print("V38.2 self-test: calibrator not loaded (method=", g_cal.Method(), ")");
+      return false;
+     }
+   double feat[50];
+   ArrayInitialize(feat, 0.0);
+   double rawProb, calProb;
+   if(!PredictWin(feat, rawProb, calProb))
+     {
+      Print("V38.2 self-test: inference/calibration chain failed");
+      return false;
+     }
+   Print("V38.2 self-test probe: raw=", DoubleToString(rawProb, 6),
+         " calibrated=", DoubleToString(calProb, 6),
+         " features=", V38_2_N_FEATURES);
    return true;
   }
 
@@ -715,7 +775,21 @@ int OnInit()
      {
       Print("V38.2: embedded calibrator parse failed; trying file '", InpCalibratorFile, "'");
       if(!g_cal.Load(InpCalibratorFile))
-         Print("V38.2: WARNING — calibrator not loaded from file OR resource, using raw probabilities");
+        {
+         // FAIL-CLOSED: the frozen V38.2 system requires calibrated probabilities.
+         // Running on raw ONNX probabilities is forbidden (see repair report §6).
+         Print("V38.2: FAILED to load calibrator '", InpCalibratorFile,
+               "' (resource AND file) err=", GetLastError(), " — INIT FAILED");
+         return INIT_FAILED;
+        }
+      Print("V38.2: calibrator loaded from file '", InpCalibratorFile, "'");
+     }
+   // Frozen system requires the canonical isotonic calibrator.
+   if(!g_cal.IsLoaded() || g_cal.Method() != "isotonic")
+     {
+      Print("V38.2: calibrator invalid (loaded=", g_cal.IsLoaded(),
+            " method=", g_cal.Method(), "; required: isotonic) — INIT FAILED");
+      return INIT_FAILED;
      }
 
    // V38.2: Load ONNX model (50 features, no ZipMap for clean MQL5 arrays).
@@ -724,7 +798,10 @@ int OnInit()
    // with a bare filename fails with ERR_FILE_NOT_EXIST=5019 because the
    // tester working directory has no MQL5\Files\v38_2_final_model.onnx).
    // Fall back to OnnxCreate(filename) for terminal-mode hot-swap.
-   Print("V38.2: ONNX resource bytes=", ArraySize(g_onnx_data));
+   Print("V38.2 ONNX: requested filename='", InpOnnxFilename,
+         "' resource bytes=", ArraySize(g_onnx_data),
+         " tester=", (bool)MQLInfoInteger(MQL_TESTER),
+         " terminal_data_path='", TerminalInfoString(TERMINAL_DATA_PATH), "'");
    if(ArraySize(g_onnx_data) > 0)
       AIHandle = OnnxCreateFromBuffer(g_onnx_data, ONNX_DEFAULT);
    else
@@ -775,6 +852,16 @@ int OnInit()
       OnnxRelease(AIHandle); AIHandle = INVALID_HANDLE;
       return INIT_FAILED;
      }
+
+   // V38.2: MODEL SELF-TEST (fail-closed). Runs one deterministic inference
+   // through the full ONNX + calibration chain before any trading logic.
+   if(!ModelSelfTest())
+     {
+      Print("V38.2 MODEL SELF TEST: FAIL");
+      if(AIHandle != INVALID_HANDLE) { OnnxRelease(AIHandle); AIHandle = INVALID_HANDLE; }
+      return INIT_FAILED;
+     }
+   Print("V38.2 MODEL SELF TEST: PASS");
 
    // V37: Configure trade object
    Trade.SetExpertMagicNumber(InpMagic);
