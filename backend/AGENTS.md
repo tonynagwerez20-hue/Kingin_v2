@@ -114,3 +114,12 @@ full-data pre-modeling validation phase using genuine Dukascopy/Jetta M1/M5/M15 
 - M5=596,572 bars, M15=198,858 bars, M1=500,000 bars, H1=49,719 bars
 - Range: 2018-01-01 → 2026-03-03
 - Full-data M15 dataset cached: v38/v38_2/full_data_artifacts/v38_2_dataset_M15_H1_lb80.parquet
+
+## V38.2 TESTER-SANDBOX ONNX FIX VERIFIED (2026-08-24, build 38.22, commit 2e94583)
+- Root cause of err=5019: tester agent sandbox (Tester\\Agent-*\\MQL5\\Files) has no model file; OnnxCreate(bare filename) resolves against agent dir. Fix: #resource-embedded canonical ONNX+JSON loaded via OnnxCreateFromBuffer (V37 pattern), OnnxCreate filename fallback for terminal hot-swap.
+- RUNTIME VERIFIED in MT5 build 6140 local tester agent (model file ABSENT from agent MQL5\\Files): ONNX loaded, calibrator isotonic 85 pts, MODEL SELF TEST PASS, runtime parity vs Python ONNX (all-zeros probe raw=0.385226 cal=0.357920, delta<3e-7), observation run Candidates=4800, no 5019.
+- Fail-closed: missing/invalid calibrator or self-test failure -> INIT_FAILED; raw-probability fallback deleted.
+- TOOLCHAIN CAVEAT: MetaEditor CLI /compile under Wine spuriously fails #resource with error 313 (GUI compile OK, 0/0). Use GUI or native Windows MetaEditor.
+- Terminal runs in PORTABLE mode: active MQL5 root = C:\\Program Files\\MetaTrader 5\\MQL5. MetaQuotes-Demo login 10012356505 exists for tester runs (ini needs Login=).
+- G9/G10 PASS; G11/G12 BLOCKED (need native Windows + Exness-MT5Trial9 login 476553066, XAUUSD M5).
+- Report: backend/models/v38_2/docs/V38_2_ONNX_CALIBRATOR_REPAIR_REPORT.md
