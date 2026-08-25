@@ -123,3 +123,13 @@ full-data pre-modeling validation phase using genuine Dukascopy/Jetta M1/M5/M15 
 - Terminal runs in PORTABLE mode: active MQL5 root = C:\\Program Files\\MetaTrader 5\\MQL5. MetaQuotes-Demo login 10012356505 exists for tester runs (ini needs Login=).
 - G9/G10 PASS; G11/G12 BLOCKED (need native Windows + Exness-MT5Trial9 login 476553066, XAUUSD M5).
 - Report: backend/models/v38_2/docs/V38_2_ONNX_CALIBRATOR_REPAIR_REPORT.md
+
+## V38.2 REMAINING-GATE VERIFICATION (2026-08-25 addendum — MT5/ONNX/Model/Strat/Risk INTACT)
+- After env reset, re-provisioned Wine/MT5 6140; created MetaQuotes-Demo 5054961853 (XAUUSD present this time).
+- XAUUSD M5 observation (Model=0 real ticks, Trading disabled): PASS — 2,041,321 ticks, Candidates=117887, ML-approved=0, Entered=0, clean shutdown, no 5019.
+- Model+calibrator init PASS; ModelSelfTest PASS (zeros probe raw=0.385226 cal=0.357920 exact vs Python); feature generation emitted on real ATR (atr=1.76, slDist=2.12).
+- Execution/Forward gates BLOCKED: across observation window max calibrated prob 0.4361 < 0.50 (all 133,935 rejects reason 'ML prob'), so no entries/SL/TP exercised. Forcing trades would require strategy change — forbidden.
+- Parity: mql5 fixture 10/10 decisions OK (6 enter/4 skip); zeros probe exact; max prob over random vectors 0.7050 (model not degraded).
+- Next correct step: StructureEngine/FeatureEngine live feature-parity audit (code-level skew), beyond scope because repair frozen as canonical.
+- PRODUCTION READY = NO. G10 PASS; G11/G12 BLOCKED; G12/NativeWindows/Exness BLOCKED.
+- Report: backend/models/v38_2/docs/V38_2_ONNX_CALIBRATOR_REPAIR_REPORT.md (addendum).
