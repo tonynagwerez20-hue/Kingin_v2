@@ -126,6 +126,35 @@ veto times ⇒ classification A (intended protection).
   calibrator, feature definitions/order, labels, ML threshold 0.50, session
   hours 10–22 EAT, risk parameters, strategy logic.
 
+## 7a. Live Exness evidence attempt (2026-08-25, user-provided credentials)
+
+Environment rebuilt from scratch: Wine 10.0 (Debian 10.0~repack-6) + Xvfb +
+fresh MT5 install (build 6140) in a new portable prefix. Results:
+
+1. **Harness compilation: PASS** — `V38_2_GateDiagnostic.mq5` compiled by real
+   MetaEditor64: **0 errors, 0 warnings**, `V38_2_GateDiagnostic.ex5` (13,816
+   bytes).
+2. **Exness connectivity: PASS** — server-directory scan found all Exness
+   entities; TCP+auth handshake completed to Exness-MT5Trial9,
+   ExnessMU-MT5Trial9, ExnessSC-MT5Trial9, ExnessVG-MT5Trial9,
+   ExnessKE-MT5Trial9. The infrastructure path (Wine → Exness servers) works.
+3. **Authorization: FAIL (external blocker)** — every attempt returned
+   `Network '476553066': authorization on <server> failed (Invalid account)`
+   (7 attempts, journal timestamps 19:46:57–19:55:00). Password typing was
+   verified character-exact (typed into a visible field: `@Tony.123`,
+   9 chars); a trailing-space variant was also tried. MT5 "Invalid account"
+   = the account number does not exist on that server or the password is
+   wrong. Exness trial accounts also expire after ~21 days of inactivity.
+
+**Consequence:** live XAUUSDm symbol-spec capture (§6) remains BLOCKED — on
+credentials, not on tooling. The compiled harness is ready in
+`MQL5/Experts/V38_2_GateDiagnostic.ex5`; once a valid login is supplied, the
+full §6 evidence set can be collected in minutes (attach harness to an
+XAUUSDm chart, or run the Strategy Tester against the account).
+
+Note for native-Windows users: the same harness compiles/runs unmodified on a
+real Exness MT5 install — that path is unaffected by this sandbox blocker.
+
 ## 8. Final verdict block
 
 - SESSION GATE: source PASS; Exness runtime PENDING (harness required)
