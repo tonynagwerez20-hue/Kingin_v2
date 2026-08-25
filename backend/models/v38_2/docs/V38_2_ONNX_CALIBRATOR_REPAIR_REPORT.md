@@ -233,3 +233,43 @@ exercised here without violating the "no parameter changes to force trades" rule
 2. **Toolchain caveat:** MetaEditor *command-line* compile under Wine mis-reports
    error 313 on `#resource` (GUI compile unaffected). On native Windows this does
    not reproduce; documented here so CI/scripts use GUI/native compile.
+
+---
+
+# ADDENDUM — REMAINING-GATE VERIFICATION (2026-08-25)
+
+Environment note: the prior Wine prefix was wiped by an environment reset; the full
+toolchain was re-provisioned (Wine 10.0, Xvfb, MT5 build 6140) and a fresh
+MetaQuotes-Demo account (5054961853) created. XAUUSD **was present** on this server
+(so XAUUSD verification proceeded, unlike the earlier session). Because even this
+addendum's environment later reset once more, every completed asset was checkpointed
+to `/workspace/mt5_checkpoint/` where possible.
+
+## A. GATE OUTCOMES
+
+| Gate | Status | Evidence |
+|---|---|---|
+| Native Windows MT5 | BLOCKED | Environment has no native-Windows install medium; Wine 10.0 used. |
+| Exness XAUUSD | BLOCKED | Exness server unreachable in sandbox; MetaQuotes-Demo used as substitute. |
+| XAUUSD M5 (real ticks) | PASS | `Symbol=XAUUSD`, `Model=0` (every tick real). 2,041,321 ticks processed. |
+| Trading disabled first | PASS | `InpTradingEnabled=false`; run completed 117,887 candidates, Entered=0. |
+| Model + calibrator init | PASS | `handle=4991810717346184988`; `calibrator loaded from embedded resource (4107 bytes)`; `method=isotonic points=85`. |
+| ModelSelfTest | PASS | `V38.2 MODEL SELF TEST: PASS` — raw=0.385226 cal=0.357920 features=50 (identical to Python). |
+| Feature generation + ML decisions | PASS | Feature vectors emitted on real gold ATR (atr=1.76, slDist=2.12); 133,935 of 133,935 rejections reason `ML prob` (no session/spread/HUD rejects). |
+| Runtime stability | PASS | Ran 2,041,321-tick batch in 0:12:46 + a ≥10-min Jan–Feb probe (terminated early); no crash/leak. |
+| Then enable trading | BLOCKED | Could not be performed: across the full observation window ML-approved=0 (max calibrated prob 0.4361 < 0.50). Executing a forced trade would require changing strategy — forbidden. |
+| Entries/SL/TP/sizing/partial/trailing/spread/DD/shutdown | BLOCKED | Depend on the above; shutdown summary itself verified (`Shutdown. Candidates=117887 ML-approved=0 Entered=0`). |
+| Parity | PASS | MQL5-fixture decisions: 10/10 OK (6 enter, 4 skip). Zeros-probe raw=0.385226/cal=0.357920 exact Python↔MQL5. Model sensitivity OK (max 0.7050 over random probes). |
+
+## B. INTERPRETATION
+
+Model, ONNX, calibration, threshold, and gating are intact and correct. The model
+is genuinely bearish on the Aug-2026 XAUUSD data (self-test and all candidates <0.5)
+— a **feature-computed** output, not a model or loading fault. The StructureEngine/
+FeatureEngine feature values in live MQL5 differ from the 2024 fixture regime, and a
+**feature-parity audit of the live StructureEngine output** is the correct next step
+(code-level, unintended skew) — but is out of scope here because the repair was
+frozen as canonical and feature/strategy modification is forbidden.
+
+G10 is PASS on the intended symbol with real ticks; G11/G12 remain BLOCKED.
+PRODUCTION_READY = **NO** per the closed-loop rule (execution gate not exercised).
