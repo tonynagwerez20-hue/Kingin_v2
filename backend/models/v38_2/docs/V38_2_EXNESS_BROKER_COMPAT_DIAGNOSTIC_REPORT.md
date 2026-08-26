@@ -316,3 +316,57 @@ bypass of margin/retcode checks.
   upgrades are source-level; runtime verification remains BLOCKED here.
 - **CANONICAL ML MODIFIED: NO.** **MODEL/ONNX/CALIBRATOR MODIFIED: NO.**
 - Next gate: user's native MT5 sequence §8 → VETO MATRIX summary decides.
+
+---
+
+## 12. ADDENDUM — G9 RECOMPILE PASS, G10-G12 BLOCKED (2026-08-26, build 38.23)
+
+Environment re-provisioned from scratch this session: Wine 10.0
+(Debian 10.0~repack-6, win64), Xvfb, MT5 build 6140 installed via
+`mt5setup.exe /auto` into a fresh prefix (`.tools/wineprefix`, portable
+mode, install root `C:\Program Files\MetaTrader 5`).
+
+**G9 — COMPILE: PASS (runtime evidence, not source audit).**
+- First CLI attempt failed only because a bare prefix has no
+  `MQL5\Include\Trade\Trade.mqh` (standard library absent): 1 error,
+  `error 106: file 'Include\Trade\Trade.mqh' not found`. Launching
+  `terminal64.exe` once self-updated the terminal and downloaded the full
+  standard library (453 files updated, per terminal log).
+- `MetaEditor64.exe /compile:"MQL5\Experts\V38_2\V38_2_EA.mq5" /log` then
+  produced: **`Result: 0 errors, 0 warnings`**, 2412 ms. The earlier
+  build-38.22 caveat ("CLI /compile spuriously fails #resource with
+  error 313") did NOT reproduce — CLI compile with `#resource` works
+  once the standard library is present.
+- Embedded resources confirmed in the build log:
+  `v38_2_final_model.onnx` as `g_onnx_data[927383]`,
+  `v38_2_calibrator.json` as `g_cal_data[4107]`.
+- Output: `V38_2_EA.ex5`, 408,114 bytes,
+  sha256 `e65581435f3d23e69c659f02aa5ec2a34db8957c36adf2744af6ee2f14d2f2ce`.
+  This binary replaces the stale build-38.22 ex5 in the repo. Build log:
+  `backend/models/v38_2/mql5/build_logs/V38_2_EA_compile_38.23.log`.
+- `V38_2_GateDiagnostic.mq5` also compiled: 0 errors, 0 warnings.
+- Canonical artifact hashes re-verified unchanged before and after the
+  compile step (ONNX `3f004d9f…`, calibrator `5ba026a3…`).
+
+**G10-G12 — RUNTIME: BLOCKED in this sandbox (root cause: account auth).**
+- `terminal64.exe /portable /config:v38_2_obs.ini` (Tester section:
+  XAUUSD M5, Model=0 real ticks, observation inputs) exits with
+  `tester not started because the account is not specified`
+  (exit code -1000012353). The tester agent requires the terminal to be
+  authorized on a trading account; the fresh prefix has none.
+- MetaQuotes-Demo demo-account creation was attempted via the terminal
+  GUI under Xvfb/xdotool. The registration form's Mobile Phone
+  combobox cannot be satisfied under Wine: typed/pasted digits land
+  inside the country-label parentheses (caret defect) and the control's
+  validation (`Required`) never clears regardless of format
+  (10/11 digits, with/without `+1`, country pre-selected). ~25 GUI
+  attempts, all rejected; `Next >` stays disabled.
+- Prior session's MetaQuotes-Demo logins (10012356505, 5054961853) have
+  no recoverable passwords; Exness account 476553066 credentials are not
+  in the repo/environment.
+
+**Remaining verification path (unchanged, §8):** native Windows MT5 with
+a valid demo/broker login → attach build-38.23 ex5 (this commit's binary)
+→ observation run on XAUUSDm M5 "Every tick based on real ticks" →
+collect `[SYMBOL]` digits line, dual-verdict `[GATES]` spread line, and
+the deinit VETO MATRIX summary.
