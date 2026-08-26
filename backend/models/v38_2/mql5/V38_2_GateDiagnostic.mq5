@@ -10,8 +10,8 @@
 //|  - standalone: shares NO state with V38_2_EA (no #resource, no    |
 //|    ONNX, no calibrator, no GlobalVariables, no trade calls)       |
 //|  - read-only: only SymbolInfo*/Time*/iTime/FileWrite/Print        |
-//|  - replicates the canonical gate arithmetic VERBATIM so its       |
-//|    verdicts are directly comparable with the EA's HUD status      |
+//|  - logs the legacy (raw points) AND normalized (price) spread     |
+//|    verdicts side-by-side, so the exact failure mode is explicit   |
 //+------------------------------------------------------------------+
 #property strict
 #property version   "1.00"
@@ -24,6 +24,7 @@ input int    InpStartHourEAT      = 10;    // mirror of canonical default
 input int    InpEndHourEAT        = 22;    // mirror of canonical default
 input bool   InpUseSessionFilter  = true;  // mirror of canonical default
 input int    InpMaxSpreadPoints   = 30;    // mirror of canonical default (points)
+input double InpMaxSpreadRefPoint = 0.01;  // reference point (2-digit XAUUSD)
 input int    InpSpreadTickStride  = 50;    // spread line every Nth tick
 input bool   InpLogToFile         = true;  // also write CSV to MQL5\Files
 input string InpLogFile           = "v38_2_gate_diag.csv";
@@ -69,6 +70,15 @@ void LogSymbolSpec()
       SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX),
       SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP),
       SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE));
+   PrintFormat("[SYMBOL2] trade_mode=%d calc_mode=%d order_mode=%d filling_mode=%d exemode=%d",
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_ORDER_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_EXEMODE));
+   PrintFormat("[GATESPEC] norm_cap_price=%.4f cap_native_points=%.1f",
+      InpMaxSpreadPoints * InpMaxSpreadRefPoint,
+      _Point > 0 ? (InpMaxSpreadPoints * InpMaxSpreadRefPoint) / _Point : -1);
 
    // Broker's actual trading sessions for this symbol
    for(int day = 0; day < 7; day++)
@@ -126,22 +136,31 @@ void LogGates(bool full)
 
    // Gate 1: session (verbatim semantics)
    bool g_session = SessionEAT();
-   // Gate 2: spread (verbatim expression from canonical OnTick)
-   bool g_spread  = have_tick && !(spread_points > InpMaxSpreadPoints);
+   // Gate 2 (legacy): raw points < V38_2_EA pre-fix formula
+   bool g_spread_legacy = have_tick && !(spread_points > InpMaxSpreadPoints);
+   // Gate 2 (normalized): price cap, identical on 2-digit, restored on 3-digit
+   bool g_spread_norm   = have_tick &&
+                          !(spread_price > InpMaxSpreadPoints * InpMaxSpreadRefPoint);
 
    if(full)
-      PrintFormat("[GATES] tick#=%I64d session=%s spread=%s "
-                  "bid=%.5f ask=%.5f spread_price=%.5f spread_points=%.1f limit=%d "
+      PrintFormat("[GATES] tick#=%I64d session=%s spread_legacy=%s spread_norm=%s "
+                  "bid=%.5f ask=%.5f spread_price=%.5f spread_native_points=%.1f "
+                  "legacy_cap=%d norm_cap_price=%.4f "
                   "| downstream(candidate/ML/risk/order)=%s",
          g_tickNo,
          g_session ? "PASS" : "FAIL(VETO: SESSION)",
-         g_spread  ? "PASS" : "FAIL(VETO: SPREAD)",
-         q.bid, q.ask, spread_price, spread_points, InpMaxSpreadPoints,
-         (g_session && g_spread) ? "REACHABLE" : "BLOCKED");
+         g_spread_legacy ? "PASS" : "FAIL(VETO: SPREAD-legacy)",
+         g_spread_norm ? "PASS" : "FAIL(VETO: SPREAD-norm)",
+         q.bid, q.ask, spread_price, spread_points,
+         InpMaxSpreadPoints, InpMaxSpreadPoints * InpMaxSpreadRefPoint,
+         (g_session && g_spread_norm) ? "REACHABLE" : "BLOCKED");
    else
-      PrintFormat("[GATES:SPREAD] tick#=%I64d spread_points=%.1f limit=%d %s",
+      PrintFormat("[GATES:SPREAD] tick#=%I64d spread_native_points=%.1f "
+                  "legacy_cap=%d norm_cap_price=%.4f legacy=%s norm=%s",
          g_tickNo, spread_points, InpMaxSpreadPoints,
-         g_spread ? "PASS" : "FAIL");
+         InpMaxSpreadPoints * InpMaxSpreadRefPoint,
+         g_spread_legacy ? "PASS" : "FAIL",
+         g_spread_norm ? "PASS" : "FAIL");
 
    if(g_fileH != INVALID_HANDLE)
      {
@@ -151,7 +170,9 @@ void LogGates(bool full)
          q.bid, q.ask,
          DoubleToString(spread_price, 5),
          DoubleToString(spread_points, 2),
-         g_session ? 1 : 0, g_spread ? 1 : 0);
+         g_session ? 1 : 0,
+         g_spread_legacy ? 1 : 0,
+         g_spread_norm ? 1 : 0);
       FileFlush(g_fileH);
      }
   }
@@ -167,7 +188,7 @@ int OnInit()
       if(g_fileH != INVALID_HANDLE)
          FileWrite(g_fileH, "gmt", "symbol", "digits", "point",
                    "bid", "ask", "spread_price", "spread_points",
-                   "session_pass", "spread_pass");
+                   "session_pass", "spread_pass_legacy", "spread_pass_normalized");
      }
    return INIT_SUCCEEDED;
   }

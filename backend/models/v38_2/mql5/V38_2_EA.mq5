@@ -40,8 +40,20 @@
 //|    partial close + trailing, emergency close, HUD,             |
 //|    session/spread filters, news blackout, ATR risk              |
 //+------------------------------------------------------------------+
+//  38.23 changes (diagnostic + broker-compat patch, ML chain untouched):
+//    1. VETO MATRIX: additive gate counters + shutdown summary (OnDeinit).
+//    2. Broker symbol spec/time dump (InpBrokerDiagnostics, default ON).
+//    3. SPREAD UNIT FIX: gate compares (ask-bid) PRICE vs
+//       InpMaxSpreadPoints * InpMaxSpreadRefPoint ($0.30 default). Identical
+//       behaviour on 2-digit symbols; restores canonical intent on 3-digit
+//       symbols (e.g., Exness XAUUSDm) where '30 points' == $0.03 previously.
+//    4. Feature-41 parity fix (in FeatureEngine): O_SPREAD now price units
+//       (points*_Point), matching Python training units — verified against
+//       v38_2_feature_parity_fixture.json (f41 ~ $0.26-$0.51).
+//    CANONICAL UNCHANGED: 50-feature contract, ONNX, calibrator, threshold
+//    0.50, session window 10-22 EAT, risk controls, SMC structure logic.
 #property strict
-#property version   "38.22"
+#property version   "38.23"
 #property copyright "V38.2 — Evolution of V37 Production"
 #include <V38_2_Structure.mqh>
 #include <V38_Calibrator.mqh>
@@ -119,7 +131,13 @@ input double          InpTrailATRmult      = 1.50;      // Trail distance (ATR m
 input double          InpTrailStepPoints   = 20.0;      // Trail step (points)
 
 input group "=== MARKET FILTERS ==="
-input int             InpMaxSpreadPoints   = 30;        // Max spread (points)
+input int             InpMaxSpreadPoints   = 30;        // Max spread (points on reference symbol)
+input double          InpMaxSpreadRefPoint = 0.01;      // Reference point size (2-digit XAUUSD)
+
+input group "=== DIAGNOSTICS (additive, zero gate-logic change) ==="
+input bool            InpBrokerDiagnostics = true;     // Symbol/time/gate diagnostic blocks
+input int             InpDiagTickStride     = 50;        // Intra-bar spread sample every N ticks
+input bool            InpDumpFeatures       = false;     // Print first 50-feature vector (one-shot)
 
 input group "=== V38.2 ML INTELLIGENCE ==="
 input double          InpProbThreshold    = 0.50;      // Calibrated probability threshold
@@ -177,6 +195,117 @@ struct STATE
 STATE S;
 
 //+------------------------------------------------------------------+
+//| VETO MATRIX (additive diagnostics — canonical gates unchanged)   |
+//+------------------------------------------------------------------+
+enum EV38Veto
+  {
+   VETO_NONE = 0,
+   VETO_SESSION,
+   VETO_SPREAD,
+   VETO_NO_SETUP,
+   VETO_FEATURES,
+   VETO_ML,
+   VETO_RR,
+   VETO_RISK,
+   VETO_MARGIN,
+   VETO_ORDER_CHECK,
+   VETO_EXECUTION,
+   VETO_MARKET_CLOSED,
+   VETO_TRADE_DISABLED,
+   VETO_NEWS,
+   VETO_TRADE_CAP,
+   VETO_DD_LOCK,
+   VETO_NO_TICK,
+   VETO_POSITION_ACTIVE,
+   VETO_WARMUP
+  };
+
+string VetoName(EV38Veto v)
+  {
+   switch(v)
+     {
+      case VETO_SESSION:        return "SESSION";
+      case VETO_SPREAD:         return "SPREAD";
+      case VETO_NO_SETUP:       return "NO_SETUP";
+      case VETO_FEATURES:       return "FEATURES";
+      case VETO_ML:             return "ML";
+      case VETO_RR:             return "RR";
+      case VETO_RISK:           return "RISK";
+      case VETO_MARGIN:         return "MARGIN";
+      case VETO_ORDER_CHECK:    return "ORDER_CHECK";
+      case VETO_EXECUTION:      return "EXECUTION";
+      case VETO_MARKET_CLOSED:  return "MARKET_CLOSED";
+      case VETO_TRADE_DISABLED: return "TRADE_DISABLED";
+      case VETO_NEWS:           return "NEWS";
+      case VETO_TRADE_CAP:      return "TRADE_CAP";
+      case VETO_DD_LOCK:        return "DD_LOCK";
+      case VETO_NO_TICK:        return "NO_TICK";
+      case VETO_POSITION_ACTIVE:return "POSITION_ACTIVE";
+      case VETO_WARMUP:         return "WARMUP";
+      default:                  return "NONE";
+     }
+  }
+
+#define V38_VETO_MAX ((int)VETO_WARMUP + 1)
+
+struct GATECOUNTS
+  {
+   long   ticks_processed;
+   long   bars_processed;
+   long   session_pass;
+   long   session_fail;
+   long   spread_pass;
+   long   spread_fail;
+   long   news_pass;
+   long   news_fail;
+   long   candidate_total;
+   long   feature_pass;
+   long   feature_fail;
+   long   ml_evaluations;
+   long   ml_approved;
+   long   ml_rejected;
+   long   risk_pass;
+   long   risk_fail;
+   long   margin_pass;
+   long   margin_fail;
+   long   ordercheck_pass;
+   long   ordercheck_fail;
+   long   execution_attempts;
+   long   execution_success;
+   long   execution_fail;
+   long   veto_hist[V38_VETO_MAX];
+  };
+GATECOUNTS GC;
+
+void RecordVeto(EV38Veto v)
+  {
+   if((int)v < V38_VETO_MAX)
+      GC.veto_hist[v]++;
+  }
+
+// Feature-name table for one-shot parity dump (order frozen by contract)
+const string V38_FEATURE_NAMES[V38_2_N_FEATURES] = {
+   "HTF_REGIME_ENC","LTF_REGIME_ENC","BOS_COUNT_RECENT","CHOCH_COUNT_RECENT",
+   "LAST_EVENT_DIRECTION_ENC","LAST_EVENT_DISP_ATR","LAST_EVENT_AGE_BARS",
+   "PROTECTED_HIGH","PROTECTED_LOW","MULTI_LEG_ALIGNED","LEG_EXTENSION_ATR",
+   "STRUCTURE_STRENGTH","NEAREST_LIQUIDITY_DIST","NEAREST_LIQUIDITY_SIDE",
+   "LIQUIDITY_SWEPT","SWEEP_DEPTH_ATR","POST_SWEEP_REACTION_ATR",
+   "EQH_EQL_PRESENT","INDUCEMENT_PRESENT","OB_PRESENT","OB_DIRECTION_ENC",
+   "OB_STRENGTH","OB_DISTANCE_ATR","OB_AGE_BARS","OB_MITIGATION_COUNT",
+   "OB_FRESHNESS_ENC","OB_MITIGATION_DEPTH","FVG_PRESENT","FVG_DIRECTION_ENC",
+   "FVG_SIZE_ATR","FVG_AGE_BARS","FVG_FILL_PCT","FVG_FRESHNESS_ENC",
+   "PD_POSITION","PD_LABEL_ENC","PD_DISTANCE_FROM_EQ","PD_LEG_SPAN_ATR",
+   "ATR","ATR_PERCENTILE","DAILY_RANGE_PCT","VOLATILITY_REGIME_ENC",
+   "SPREAD","SESSION_ENC","SESSION_PHASE_ENC",
+   "HTF_ALIGNMENT_ENC","LTF_ALIGNMENT_ENC","DISTANCE_TO_ENTRY_ATR",
+   "SL_DISTANCE_ATR","TP_DISTANCE_ATR","AVAILABLE_RR"
+  };
+
+bool  g_featDumpDone = false;
+long  g_diagTick     = 0;
+bool  g_specDumpDone = false;
+
+//+------------------------------------------------------------------+
 //| V37 UTILITY FUNCTIONS (preserved exactly)                         |
 //+------------------------------------------------------------------+
 string K(string s) { return Prefix + s; }
@@ -232,6 +361,115 @@ bool SessionEAT()
    if(InpStartHourEAT < InpEndHourEAT)
       return x.hour >= InpStartHourEAT && x.hour < InpEndHourEAT;
    return x.hour >= InpStartHourEAT || x.hour < InpEndHourEAT;
+  }
+
+//+------------------------------------------------------------------+
+//| DIAGNOSTIC HELPERS (additive)                                    |
+//+------------------------------------------------------------------+
+void DumpSymbolSpec()
+  {
+   MqlTick q;
+   if(!SymbolInfoTick(_Symbol, q))
+     {
+      Print("[SYMBOL] _Symbol=", _Symbol, " - SymbolInfoTick FAILED");
+      return;
+     }
+   double point  = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   double ticksz = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   long   digits = (long)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   double spread_price  = q.ask - q.bid;
+   double spread_points = point  > 0 ? spread_price / point  : -1;
+   double spread_ticks  = ticksz > 0 ? spread_price / ticksz : -1;
+
+   PrintFormat("[SYMBOL] sym=%s digits=%d point=%.5f ticks(decl)=%.5f "
+               "bid=%.5f ask=%.5f spread_price($)=%.5f spread_points=%.1f spread_ticks=%.1f",
+      _Symbol, (int)digits, point, ticksz,
+      q.bid, q.ask, spread_price, spread_points, spread_ticks);
+   PrintFormat("[SYMBOL2] tick_val=%.5f tick_val_profit=%.5f tick_val_loss=%.5f "
+               "vol_min=%.2f vol_max=%.2f vol_step=%.2f stops_level=%d freeze_level=%d "
+               "spread_int=%d spread_float=%s",
+      SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE),
+      SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE_PROFIT),
+      SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE_LOSS),
+      SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN),
+      SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX),
+      SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD),
+      SymbolInfoInteger(_Symbol, SYMBOL_SPREAD_FLOAT) ? "true" : "false");
+   PrintFormat("[SYMBOL3] trade_mode=%d calc_mode=%d order_mode=%d filling_mode=%d exemode=%d",
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_ORDER_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE),
+      (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_EXEMODE));
+   // spread cap shown in THREE explicit units
+   double limit_price = InpMaxSpreadPoints * InpMaxSpreadRefPoint;
+   double limit_pts   = SymbolInfoDouble(_Symbol, SYMBOL_POINT) > 0 ?
+                        limit_price / SymbolInfoDouble(_Symbol, SYMBOL_POINT) : -1;
+   PrintFormat("[GATESPEC] spread_cap_points_ref=%d ref_point=%.5f "
+               "cap_price($)=%.5f cap_native_points=%.1f current_spread_price($)=%.5f verdict=%s",
+      InpMaxSpreadPoints, InpMaxSpreadRefPoint, limit_price, limit_pts,
+      spread_price, (spread_price <= limit_price) ? "PASS" : "FAIL");
+  }
+
+void DumpSessionSchedule()
+  {
+   for(int day = 0; day < 7; day++)
+     {
+      for(uint i = 0; ; i++)
+        {
+         datetime from, to;
+         if(!SymbolInfoSessionTrade(_Symbol, (ENUM_DAY_OF_WEEK)day, i, from, to))
+            break;
+         PrintFormat("[SESSIONSCHEDULE] day=%d slot=%d %02d:%02d -> %02d:%02d",
+            day, i,
+            (int)(from / 3600) % 24, (int)(from / 60) % 60,
+            (int)(to   / 3600) % 24, (int)(to   / 60) % 60);
+        }
+     }
+  }
+
+void DumpTimeSources()
+  {
+   datetime tc  = TimeCurrent();
+   datetime ts  = TimeTradeServer();
+   datetime tl  = TimeLocal();
+   datetime tg  = TimeGMT();
+   datetime eat = tg + 10800;
+   MqlDateTime xe; TimeToStruct(eat, xe);
+   bool session_ok = SessionEAT();
+   PrintFormat("[TIME] current=%s trade_server=%s local=%s gmt=%s EAT=%s "
+               "EAT_hour=%d dow=%d window=EAT%d-%d session_verdict=%s",
+      TimeToString(tc, TIME_DATE|TIME_SECONDS),
+      TimeToString(ts, TIME_DATE|TIME_SECONDS),
+      TimeToString(tl, TIME_DATE|TIME_SECONDS),
+      TimeToString(tg, TIME_DATE|TIME_SECONDS),
+      TimeToString(eat, TIME_DATE|TIME_SECONDS),
+      xe.hour, xe.day_of_week,
+      InpStartHourEAT, InpEndHourEAT,
+      session_ok ? "PASS" : "FAIL");
+  }
+
+void DumpSpreadGate(const MqlTick &q)
+  {
+   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   double price = q.ask - q.bid;
+   double pts   = point > 0 ? price / point : -1;
+   double limit_price = InpMaxSpreadPoints * InpMaxSpreadRefPoint;
+   PrintFormat("[GATE:SPREAD] tick#=%I64d bid=%.5f ask=%.5f spread_price($)=%.5f "
+               "spread_native_points=%.2f cap_price($)=%.5f verdict=%s",
+      g_diagTick, q.bid, q.ask, price, pts,
+      limit_price, (price <= limit_price) ? "PASS" : "FAIL");
+  }
+
+void DumpFeatureVector(const double &feat[], const ENUM_TIMEFRAMES tf, int bar, string dir)
+  {
+   PrintFormat("[FEATURES] tf=%s bar=%d dir=%s - %d values (canonical order):",
+               EnumToString(tf), bar, dir, V38_2_N_FEATURES);
+   for(int i = 0; i < V38_2_N_FEATURES; i++)
+      PrintFormat("[F%02d] %-32s = %.6f", i, V38_FEATURE_NAMES[i], feat[i]);
   }
 
 void DailyReset()
@@ -653,9 +891,14 @@ bool OpenTrade(ENUM_ORDER_TYPE type, double slDistPrice, double calProb)
    double lot;
    if(!CalcLot(type, price, sl, lot))
      {
+      // CalcLot is this EA's compound risk+margin gate (binary-search size
+      // checking via OrderCalcProfit + free-margin test via OrderCalcMargin);
+      // a failure is counted once as a risk veto.
+      GC.risk_fail++; RecordVeto(VETO_RISK);
       S.status = "REJECT: RISK/MARGIN";
       return false;
      }
+   GC.risk_pass++; GC.margin_pass++; GC.ordercheck_pass++;
 
    Trade.SetExpertMagicNumber(InpMagic);
    Trade.SetDeviationInPoints(InpDeviationPoints);
@@ -664,7 +907,11 @@ bool OpenTrade(ENUM_ORDER_TYPE type, double slDistPrice, double calProb)
    // V37 opens with SL=sl, tp=0 (no hard TP, managed exit).
    // V38.2 honours InpUseHardTP for the +2R hard-TP variant.
    if(!Trade.PositionOpen(_Symbol, type, lot, 0, sl, tp, "V38_2"))
+     {
+      GC.ordercheck_fail++;
+      Print("V38.2: PositionOpen failed retcode=", Trade.ResultRetcode());
       return false;
+     }
    if(!TradeOK()) return false;
 
    ulong ticket;
@@ -885,6 +1132,15 @@ int OnInit()
          " Features=", V38_2_N_FEATURES,
          " Threshold=", InpProbThreshold,
          " Calibrator=", g_cal.Method());
+
+   // Phase-3/5 diagnostics at init; OnTick re-dumps on the first tick once
+   // quotes resolve (some brokers return tick only after a quote arrives).
+   if(InpBrokerDiagnostics)
+     {
+      DumpTimeSources();
+      DumpSymbolSpec();
+      DumpSessionSchedule();
+     }
    return INIT_SUCCEEDED;
   }
 
@@ -896,6 +1152,29 @@ void OnDeinit(const int reason)
    Print("V38.2: Shutdown. Candidates=", g_nCandidates,
          " ML-approved=", g_nMlApproved,
          " Entered=", g_nEntered);
+
+   // ---- VETO MATRIX SUMMARY ----------------------------------------------
+   Print("=== V38.2 VETO MATRIX ===");
+   Print("Ticks:  processed=", GC.ticks_processed);
+   Print("Bars:   processed=", GC.bars_processed);
+   Print("Session:  pass=", GC.session_pass, " fail=", GC.session_fail);
+   Print("Spread:  pass=", GC.spread_pass, " fail=", GC.spread_fail);
+   Print("News:  pass=", GC.news_pass, " fail=", GC.news_fail);
+   Print("Candidates:  total=", GC.candidate_total);
+   Print("Features:  pass=", GC.feature_pass, " fail=", GC.feature_fail);
+   Print("ML:  evaluated=", GC.ml_evaluations,
+         " approved=", GC.ml_approved, " rejected=", GC.ml_rejected);
+   Print("Risk:  approved=", GC.risk_pass, " rejected=", GC.risk_fail);
+   Print("Margin:  pass=", GC.margin_pass, " fail=", GC.margin_fail);
+   Print("OrderCheck:  pass=", GC.ordercheck_pass, " fail=", GC.ordercheck_fail);
+   Print("Execution:  attempted=", GC.execution_attempts,
+         " successful=", GC.execution_success,
+         " failed=", GC.execution_fail);
+   Print("--- veto histogram (per early-return) ---");
+   for(int v = 1; v < V38_VETO_MAX; v++)
+      if(GC.veto_hist[v] > 0)
+         PrintFormat("%-18s %I64d", VetoName((EV38Veto)v), GC.veto_hist[v]);
+   Print("=== END VETO MATRIX ===");
   }
 
 //+------------------------------------------------------------------+
@@ -903,6 +1182,28 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
   {
+   // VETO MATRIX: every gate counted; Decision pipeline unchanged.
+   GC.ticks_processed++;
+   g_diagTick++;
+
+   // Diagnostics: symbol spec dump once (after first live tick), time sources
+   // throttled to once per new LTF bar; spread unit line every N ticks.
+   if(InpBrokerDiagnostics && !g_specDumpDone)
+     {
+      DumpSymbolSpec();
+      DumpSessionSchedule();
+      g_specDumpDone = true;
+     }
+
+   static datetime s_lastBarSeen = 0;
+   datetime curBar = iTime(_Symbol, InpLTF, 0);
+   if(curBar > 0 && curBar != s_lastBarSeen)
+     {
+      s_lastBarSeen = curBar;
+      GC.bars_processed++;
+      if(InpBrokerDiagnostics) DumpTimeSources();
+     }
+
    // V37: Daily reset + position management
    DailyReset();
    Manage();
@@ -917,6 +1218,7 @@ void OnTick()
          P(K("DailyLock"), 1);
          if(InpCloseOnDailyLimit) EmergencyClose();
         }
+      RecordVeto(VETO_DD_LOCK);
       S.status = "LOCK: DD LIMIT";
       HUD();
       return;
@@ -924,30 +1226,60 @@ void OnTick()
 
    // V37: Session filter
    if(InpUseSessionFilter && !SessionEAT())
-     { S.status = "VETO: SESSION"; HUD(); return; }
+     {
+      GC.session_fail++; RecordVeto(VETO_SESSION);
+      S.status = "VETO: SESSION"; HUD(); return;
+     }
+   if(InpUseSessionFilter) GC.session_pass++;
 
-   // V37: Spread filter
+   // V37: Spread filter — restored canonical intent as (ask - bid) PRICE cap.
+   // On a 2-digit symbol (training environment) this is identical to the
+   // original (ask-bid)/_Point > 30 check; on 3-digit symbols the original
+   // formula made "30 points" equal $0.03 and vetoed continuously.
    MqlTick q;
-   if(!SymbolInfoTick(_Symbol, q)) { S.status = "VETO: NO TICK"; HUD(); return; }
-   if((q.ask - q.bid) / _Point > InpMaxSpreadPoints)
-     { S.status = "VETO: SPREAD"; HUD(); return; }
+   if(!SymbolInfoTick(_Symbol, q))
+     { RecordVeto(VETO_NO_TICK); S.status = "VETO: NO TICK"; HUD(); return; }
+   double spread_price = q.ask - q.bid;
+   double spread_cap   = InpMaxSpreadPoints * InpMaxSpreadRefPoint;
+   bool spreadOk = spread_price <= spread_cap;
+   if(spreadOk) GC.spread_pass++; else { GC.spread_fail++; }
+   if(InpBrokerDiagnostics && InpDiagTickStride > 0 && g_diagTick % InpDiagTickStride == 0)
+      DumpSpreadGate(q);
+   if(!spreadOk)
+     {
+      RecordVeto(VETO_SPREAD);
+      S.status = "VETO: SPREAD"; HUD(); return;
+     }
 
    // V37: News blackout (FILTER_ONLY = both pre and post)
    if(InpNewsMode == NEWS_FILTER_ONLY &&
       (UpcomingNews() || RecentHighImpactNews()))
-     { S.status = "VETO: NEWS BLACKOUT"; HUD(); return; }
+     {
+      GC.news_fail++; RecordVeto(VETO_NEWS);
+      S.status = "VETO: NEWS BLACKOUT"; HUD(); return;
+     }
+   else GC.news_pass++;
 
    // V37: Pre-news window block (other modes)
    if(InpNewsMode != NEWS_FILTER_ONLY && InpNewsMode != NEWS_OFF && UpcomingNews())
-     { S.status = "VETO: NEWS PREWINDOW"; HUD(); return; }
+     {
+      GC.news_fail++; RecordVeto(VETO_NEWS);
+      S.status = "VETO: NEWS PREWINDOW"; HUD(); return;
+     }
 
    // V37: Duplicate position prevention
    if(OurPositionExists())
-     { S.status = "POSITION ACTIVE"; HUD(); return; }
+     {
+      RecordVeto(VETO_POSITION_ACTIVE);
+      S.status = "POSITION ACTIVE"; HUD(); return;
+     }
 
    // V37: Max trades per day
    if(TradesToday() >= InpMaxTradesPerDay)
-     { S.status = "VETO: TRADE CAP"; HUD(); return; }
+     {
+      RecordVeto(VETO_TRADE_CAP);
+      S.status = "VETO: TRADE CAP"; HUD(); return;
+     }
 
    // V37: One trade per bar
    datetime bar = iTime(_Symbol, InpLTF, 0);
@@ -959,7 +1291,11 @@ void OnTick()
    // which is the bar that just closed when bar b+1 opens). NBars()-1 is the
    // forming bar; NBars()-2 is the most recent fully-closed bar.
    int ltfBar = g_ltf.NBars() - 2;
-   if(ltfBar < 50) { S.status = "WARMING UP"; HUD(); return; }
+   if(ltfBar < 50)
+     {
+      RecordVeto(VETO_WARMUP);
+      S.status = "WARMING UP"; HUD(); return;
+     }
 
    double atrVal = g_ltf.ATRAtIdx(ltfBar);
    if(atrVal <= 0) atrVal = 1.0;
@@ -983,29 +1319,43 @@ void OnTick()
       // V38.2: Setup detection via StructureEngine
       if(!g_ltf.IsCandidateSetup(ltfBar, direction))
         {
+         RecordVeto(VETO_NO_SETUP);
          if(InpDebugMode)
             LogCandidate(direction, 0, 0, atrVal, 0, 0, "SKIP", "no candidate setup");
          continue;
         }
 
       g_nCandidates++;
+      GC.candidate_total++;
 
       // V38.2: Build 50-feature vector
       double feat[];
       ArrayResize(feat, V38_2_N_FEATURES);
       if(!g_ltf.BuildVector(ltfBar, ltfBar, g_ltf.TsAt(ltfBar), direction, feat))
         {
+         GC.feature_fail++; RecordVeto(VETO_FEATURES);
          LogCandidate(direction, 0, 0, atrVal, 0, 0, "SKIP", "feature build failed");
          continue;
+        }
+      GC.feature_pass++;
+
+      // Phase-9 parity validation: one-shot full vector dump
+      if(InpDumpFeatures && !g_featDumpDone)
+        {
+         DumpFeatureVector(feat, InpLTF, ltfBar, direction);
+         g_featDumpDone = true;
         }
 
       // V38.2: ONNX inference + calibration
       double rawProb, calProb;
       if(!PredictWin(feat, rawProb, calProb))
         {
+         GC.ml_evaluations++;  // attempted evaluation; rejected by runtime error
+         GC.ml_rejected++; RecordVeto(VETO_ML);
          LogCandidate(direction, 0, 0, atrVal, 0, 0, "SKIP", "ONNX inference failed");
          continue;
         }
+      GC.ml_evaluations++;
 
       // V38.2: SL/TP from features
       double slDistAtr = feat[O_SL_DISTANCE_ATR];
@@ -1021,7 +1371,7 @@ void OnTick()
       // V38.2: ML threshold check
       if(calProb < InpProbThreshold)
         {
-         g_nRejected++;
+         g_nRejected++; GC.ml_rejected++; RecordVeto(VETO_ML);
          LogCandidate(direction, rawProb, calProb, atrVal, slDistPrice, rr,
                       "REJECT", StringFormat("ML prob %.3f < threshold %.2f",
                       calProb, InpProbThreshold));
@@ -1031,14 +1381,14 @@ void OnTick()
       // V38.2: Min RR check
       if(rr < InpMinRR)
         {
-         g_nRejected++;
+         g_nRejected++; GC.ml_rejected++; RecordVeto(VETO_RR);
          LogCandidate(direction, rawProb, calProb, atrVal, slDistPrice, rr,
                       "REJECT", StringFormat("RR %.2f < min %.2f", rr, InpMinRR));
          continue;
         }
 
       // This setup passed all checks
-      g_nMlApproved++;
+      g_nMlApproved++; GC.ml_approved++;
       LogCandidate(direction, rawProb, calProb, atrVal, slDistPrice, rr,
                    "ENTER", StringFormat("prob %.3f >= threshold %.2f",
                    calProb, InpProbThreshold));
@@ -1070,6 +1420,7 @@ void OnTick()
    // V37: Check if trading is enabled
    if(!InpTradingEnabled && InpMode == MODE_OBSERVATION)
      {
+      RecordVeto(VETO_TRADE_DISABLED);
       S.status = StringFormat("OBS: would ENTER %s prob=%.3f", setupDir, bestCalProb);
       PrintFormat("V38.2 [OBSERVATION]: would ENTER %s prob=%.3f rr=%.2f",
                   setupDir, bestCalProb, bestRR);
@@ -1078,15 +1429,19 @@ void OnTick()
      }
 
    // V38.2: Execute trade via V37 execution engine
+   GC.execution_attempts++;
    ENUM_ORDER_TYPE orderType = (setupDir == "bullish") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
    if(OpenTrade(orderType, bestSlDist, bestCalProb))
      {
+      GC.execution_success++;
       LastTradeBar = bar;
       P(K("TradeCount"), TradesToday() + 1);
       g_nEntered++;
       PrintFormat("V38.2: ENTER %s prob=%.3f rr=%.2f slDist=%.2f",
                   setupDir, bestCalProb, bestRR, bestSlDist);
      }
+   else
+     GC.execution_fail++;
 
    HUD();
   }
