@@ -124,6 +124,19 @@ full-data pre-modeling validation phase using genuine Dukascopy/Jetta M1/M5/M15 
 - G9/G10 PASS; G11/G12 BLOCKED (need native Windows + Exness-MT5Trial9 login 476553066, XAUUSD M5).
 - Report: backend/models/v38_2/docs/V38_2_ONNX_CALIBRATOR_REPAIR_REPORT.md
 
+## V38.2 EXNESS XAUUSDm BROKER-COMPAT DIAGNOSTIC + TWO MINIMAL FIXES (2026-08-26, build 38.23)
+- Diagnosis: EA repeatedly shows VETO: SESSION / VETO: SPREAD on Exness XAUUSDm (tester + live).
+- Proven defects (min fixes applied on branch diag/v38_2-exness-broker-compat):
+  1. SPREAD GATE: (ask-bid)/_Point > 30 points — correct on 2-digit dev symbol, veto-everything on 3-digit. Fix: price cap = InpMaxSpreadPoints × InpMaxSpreadRefPoint (= $0.30). Identical on 2-digit, canonical intent restored on 3-digit.
+  2. FEATURE 41 (O_SPREAD) PARITY: MQL5 fed integer SYMBOL_SPREAD point counts; Python fixture/dataset trained in PRICE units (f41 p50=$0.36; fixture values 0.26-0.51). Fix: points × _Point. Calibrated-prob shift on fixture up to 0.071 → now 0.
+- Additive veto matrix (GATECOUNTS + EV38Veto histogram) in V38_2_EA.mq5; deinit prints full gate counts. Symbol spec + time-source dump under InpBrokerDiagnostics (default true). InpDumpFeatures one-shot vector dump.
+- Official-source confirmation: in Strategy Tester all MQL5 clocks coincide with simulated server time (docs/runtime/testing) — SessionEAT is deterministic in tester; live shows all four clocks via DumpTimeSources.
+- Exness runtime evidence STILL BLOCKED (no Wine in sandbox; prior session's auth failed 'Invalid account'). User must collect [SYMBOL] digits line + dual-verdict [GATES] from V38_2_GateDiagnostic.mq5 or EA diagnostics.
+- BINARY NOW CURRENT (2026-08-26 update): committed V38_2_EA.ex5 rebuilt = build 38.23 source. G9 RECOMPILE PASS under Wine 10.0 / MT5 build 6140 (fresh prefix `.tools/wineprefix`, portable mode): MetaEditor64 CLI `/compile` → **0 errors, 0 warnings**, V38_2_EA.ex5 = 408,114 bytes, sha256 e65581435f3d23e69c659f02aa5ec2a34db8957c36adf2744af6ee2f14d2f2ce; #resource ONNX (927,383 B) + calibrator (4,107 B) embedded. Build log: backend/models/v38_2/mql5/build_logs/V38_2_EA_compile_38.23.log. NOTE: CLI compile WORKED here (contrary to the 38.22 'error 313' caveat) — standard library must be present first; on a bare prefix, run terminal64.exe once so it self-updates and downloads MQL5\\Include before compiling.
+- G10-G12 RUNTIME: STILL BLOCKED in sandbox. Strategy tester refuses to start without a trading account ("tester not started because the account is not specified"); fresh prefix has no saved account; MetaQuotes-Demo demo-account GUI registration is not completable under Wine (phone-field combo caret defect + server-side phone validation); Exness credentials unavailable. Native Windows + broker/demo login remains required for G10-G12.
+- Canonical ML chain untouched (ONNX/calibrator byte-identical; threshold 0.50; contract 50 features; labels/horizon unchanged).
+- Report: backend/models/v38_2/docs/V38_2_EXNESS_BROKER_COMPAT_DIAGNOSTIC_REPORT.md
+
 ## V38.2 REMAINING-GATE VERIFICATION (2026-08-25 addendum — MT5/ONNX/Model/Strat/Risk INTACT)
 - After env reset, re-provisioned Wine/MT5 6140; created MetaQuotes-Demo 5054961853 (XAUUSD present this time).
 - XAUUSD M5 observation (Model=0 real ticks, Trading disabled): PASS — 2,041,321 ticks, Candidates=117887, ML-approved=0, Entered=0, clean shutdown, no 5019.

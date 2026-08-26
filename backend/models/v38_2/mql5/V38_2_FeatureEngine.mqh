@@ -433,7 +433,11 @@ bool CV38_2FeatureEngine::BuildVector(int ltfBar, int htfBar, datetime t,
    outVector[O_DAILY_RANGE_PCT]=DailyRangePct(iHigh(_Symbol,0,(int)Bars(_Symbol,0)-1-ltfBar),
                                               iLow(_Symbol,0,(int)Bars(_Symbol,0)-1-ltfBar), atrVal);
    outVector[O_VOLATILITY_REGIME_ENC]=(double)VolatilityRegime(outVector[O_ATR_PERCENTILE]);
-   outVector[O_SPREAD]=(double)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+   // O_SPREAD parity restore: training units are PRICE (dollars), e.g.
+   // f_spread p50=0.36, p99=1.53 in v38_2_dataset_M5_H1_lb240.parquet.
+   // SYMBOL_SPREAD(points) * _Point converts natively on any digit count.
+   outVector[O_SPREAD]=(double)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)
+                       * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    outVector[O_SESSION_ENC]=(double)SessionEnc(t);
    outVector[O_SESSION_PHASE_ENC]=(double)SessionPhaseEnc(t);
    // NOTE: NO MACRO_NEWS features (contract indices 44-49 excluded)
